@@ -1,0 +1,1 @@
+# Package api — routes FastAPI

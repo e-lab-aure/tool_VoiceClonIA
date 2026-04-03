@@ -1,0 +1,34 @@
+# Environnement Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Variables d'environnement — NE JAMAIS COMMITTER
+.env
+
+# Données locales (samples audio, sorties générées, base de données, modèles fine-tunés)
+uploads/
+outputs/
+data/
+models/
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local dev context
+CLAUDE.md
+.claude/

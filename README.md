@@ -174,8 +174,17 @@ pip install vllm vllm-omni --upgrade
 ```bash
 # Terminal WSL2 (a lancer AVANT VoiceClonIA)
 source ~/vllm-env/bin/activate
-vllm serve mistralai/Voxtral-4B-TTS-2603 --omni --port 8001
+
+vllm serve mistralai/Voxtral-4B-TTS-2603 \
+  --omni \
+  --stage-configs-path "$(python -c 'import vllm_omni,os; print(os.path.dirname(vllm_omni.__file__))')/model_executor/stage_configs/voxtral_tts.yaml" \
+  --port 8001 \
+  --trust-remote-code \
+  --enforce-eager
 ```
+
+> `--stage-configs-path` pointe vers le fichier YAML de pipeline TTS installe avec vllm-omni.
+> Le `$(python -c ...)` resout automatiquement le chemin — pas besoin de le modifier.
 
 > Le port 8001 est automatiquement accessible depuis Windows via WSL2.
 

@@ -404,64 +404,19 @@ class VoxtralEngine(TTSEngine):
         }
 
         if reference_audio is not None:
-            # Voxtral génère à 24 kHz — rééchantillonnage de la référence pour correspondre.
-            # On re-encode en WAV PCM_16 24 kHz avant l'encodage base64.
-            import io
-            import soundfile as sf
-            import numpy as np
+            # Encodage du WAV tel quel (16 kHz PCM_16 mono — format natif du pipeline).
+            # Le processeur audio de Voxtral attend du 16 kHz ; resampler à 24 kHz
+            # provoque un echec dans apply_partial cote vLLM.
+            audio_b64 = base64.b64encode(reference_audio.read_bytes()).decode("ascii")
 
-            _VOXTRAL_SR = 24_000
-            audio_data, src_sr = sf.read(str(reference_audio), dtype="float32", always_2d=False)
-            if src_sr != _VOXTRAL_SR:
-                try:
-                    import librosa
-                    audio_data = librosa.resample(audio_data, orig_sr=src_sr, target_sr=_VOXTRAL_SR)
-                except ImportError:
-                    # Rééchantillonnage linéaire de secours si librosa absent
-                    n_out = int(len(audio_data) * _VOXTRAL_SR / src_sr)
-                    audio_data = np.interp(
-                        np.linspace(0, len(audio_data), n_out, endpoint=False),
-                        np.arange(len(audio_data)),
-                        audio_data,
-                    ).astype(np.float32)
-                logger.info(
-                    "Voxtral — reference reechantillonnee %d Hz -> %d Hz",
-                    src_sr, _VOXTRAL_SR,
-                )
-
-            dur_before = len(audio_data) / _VOXTRAL_SR
-
-            # Suppression du silence en debut/fin — top_db=60 pour rester permissif
-            try:
-                import librosa
-                audio_trimmed, _ = librosa.effects.trim(audio_data, top_db=60)
-                # Ne garder le trim que si au moins 1 s subsiste
-                if len(audio_trimmed) >= _VOXTRAL_SR:
-                    audio_data = audio_trimmed
-            except Exception:
-                pass
-
-            dur_after = len(audio_data) / _VOXTRAL_SR
-            logger.info(
-                "Voxtral — audio ref : %.2fs avant trim -> %.2fs apres trim",
-                dur_before, dur_after,
-            )
-
-            wav_buf = io.BytesIO()
-            sf.write(wav_buf, audio_data, _VOXTRAL_SR, format="WAV", subtype="PCM_16")
-            wav_buf.seek(0)
-            audio_b64 = base64.b64encode(wav_buf.read()).decode("ascii")
-
-            # task_type requis par vLLM pour activer le conditioning vocal
             payload["task_type"] = "Base"
             payload["ref_audio"] = f"data:audio/wav;base64,{audio_b64}"
             if ref_text:
                 payload["ref_text"] = ref_text
             logger.info(
-                "Voxtral clonage vocal — ref_audio=%s (%d Ko, %.1fs) ref_text=%s",
+                "Voxtral clonage vocal — ref_audio=%s (%d Ko) ref_text=%s",
                 reference_audio.name,
                 len(audio_b64) // 1024,
-                dur_after,
                 bool(ref_text),
             )
         else:

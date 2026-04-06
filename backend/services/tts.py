@@ -407,7 +407,7 @@ class VoxtralEngine(TTSEngine):
             # Encodage base64 du fichier audio — attendu par l'API vLLM Omni
             audio_b64 = base64.b64encode(reference_audio.read_bytes()).decode("ascii")
             payload["task_type"] = "Base"
-            payload["ref_audio"] = audio_b64
+            payload["ref_audio"] = f"data:audio/wav;base64,{audio_b64}"
             if ref_text:
                 payload["ref_text"] = ref_text
             logger.info(

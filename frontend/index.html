@@ -270,6 +270,30 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
 /* Export card */
 .export-card{background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.18);border-radius:var(--r);padding:14px;margin-bottom:14px}
 .export-code{font-family:monospace;font-size:11px;background:var(--s3);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text2);line-height:1.7;white-space:pre;overflow-x:auto;margin:8px 0}
+
+/* ── SETTINGS PANEL ── */
+.spanel{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);z-index:150;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity var(--t)}
+.spanel.open{opacity:1;pointer-events:all}
+.sp-wrap{background:var(--s1);border-left:1px solid var(--border);width:min(720px,100vw);margin-left:auto;height:100%;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease}
+.spanel.open .sp-wrap{transform:translateX(0)}
+.sp-head{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.sp-title{font-size:15px;font-weight:800;letter-spacing:-.3px;display:flex;align-items:center;gap:9px}
+.sp-close{width:30px;height:30px;border-radius:var(--r);background:var(--s2);border:1px solid var(--border);color:var(--text2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all var(--t)}
+.sp-close:hover{background:var(--red-bg);color:var(--red)}
+.sp-body{flex:1;overflow-y:auto;padding:18px 22px}
+.sp-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.sp-pcard{background:var(--s2);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:12px;overflow:hidden}
+.sp-pcard-head{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;background:var(--s3);border-bottom:1px solid var(--border)}
+.sp-pcard-body{padding:14px 16px}
+.sp-section{margin-bottom:14px}
+.sp-section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sp-fitem{display:flex;align-items:center;gap:9px;padding:5px 0;border-bottom:1px solid var(--border)}
+.sp-fitem:last-child{border-bottom:none}
+.sp-fname{flex:1;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text2)}
+.sp-fsize{font-size:10px;color:var(--text3);white-space:nowrap;flex-shrink:0}
+.sp-fdel{width:22px;height:22px;border-radius:6px;background:transparent;border:1px solid transparent;color:var(--text3);cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;transition:all var(--t);flex-shrink:0}
+.sp-fdel:hover{background:var(--red-bg);border-color:rgba(239,68,68,.3);color:var(--red)}
+.sp-empty{font-size:11px;color:var(--text3);font-style:italic;padding:6px 0}
 </style>
 </head>
 <body>
@@ -287,6 +311,7 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
         <div class="dot" id="dot"></div>
         <span id="api-lbl">Connexion…</span>
       </div>
+      <button class="icon-btn" title="Gestion des données" onclick="openSettings()" style="width:34px;height:34px;font-size:16px">⚙️</button>
     </div>
   </header>
 
@@ -388,14 +413,10 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
       </select>
     </div>
 
-    <!-- Voix preset — visible pour preset + game -->
+    <!-- Voix preset — visible pour preset + game, peuplée depuis VOXTRAL_VOICES -->
     <div class="fg" id="cg-voice" style="display:none">
       <label class="fl">Voix par défaut</label>
-      <select class="fsel" id="cpv">
-        <optgroup label="Français"><option value="fr_male">fr_male — Homme FR</option><option value="fr_female">fr_female — Femme FR</option></optgroup>
-        <optgroup label="Anglais"><option value="neutral_male">neutral_male</option><option value="neutral_female">neutral_female</option><option value="casual_male">casual_male</option><option value="casual_female">casual_female</option><option value="cheerful_female">cheerful_female</option></optgroup>
-        <optgroup label="Autres langues"><option value="es_male">es_male</option><option value="es_female">es_female</option><option value="de_male">de_male</option><option value="de_female">de_female</option><option value="it_male">it_male</option><option value="it_female">it_female</option><option value="pt_male">pt_male</option><option value="pt_female">pt_female</option></optgroup>
-      </select>
+      <select class="fsel" id="cpv"></select>
     </div>
 
     <!-- Tags — visible pour game -->
@@ -423,10 +444,47 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
   </div>
 </div>
 
+<!-- SETTINGS PANEL -->
+<div class="spanel" id="sp">
+  <div class="sp-wrap">
+    <div class="sp-head">
+      <div class="sp-title">⚙️ Gestion des données</div>
+      <button class="sp-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="sp-body" id="sp-body">
+      <div style="text-align:center;color:var(--text3);padding:40px">Chargement…</div>
+    </div>
+  </div>
+</div>
+
 <!-- TOASTS -->
 <div id="toasts"></div>
 
 <script>
+// ================================================================
+// CONSTANTES
+// ================================================================
+const ENGINE_LABELS = { chatterbox:'⚡ Chatterbox', f5tts:'✨ F5-TTS', voxtral:'🌟 Voxtral-4B', xttsv2:'🧬 XTTS-v2' };
+const CAT_LABELS    = { clone:'🎤 Clone', preset:'🤖 TTS direct', game:'🎮 Jeu' };
+const CAT_EMOJI     = { game:'🎮', preset:'🤖', clone:'🎤' };
+
+const VOXTRAL_VOICES = {
+  'Français':       ['fr_male','fr_female'],
+  'Anglais':        ['casual_male','casual_female','cheerful_female','neutral_male','neutral_female'],
+  'Autres langues': ['es_male','es_female','de_male','de_female','it_male','it_female','pt_male','pt_female','nl_male','nl_female'],
+};
+
+const FT_STATUS = {
+  none:         { col:'var(--text3)',   bg:'var(--s3)',         ico:'⬜', lbl:'Non effectué' },
+  pending:      { col:'var(--yellow)',  bg:'var(--yellow-bg)',  ico:'⏳', lbl:'En attente…' },
+  transcribing: { col:'var(--accent2)', bg:'var(--accent-bg)', ico:'🎙️', lbl:'Transcription…' },
+  preparing:    { col:'var(--accent2)', bg:'var(--accent-bg)', ico:'📦', lbl:'Préparation dataset…' },
+  training:     { col:'var(--accent2)', bg:'var(--accent-bg)', ico:'🧠', lbl:'Entraînement…' },
+  done:         { col:'var(--green)',   bg:'var(--green-bg)',   ico:'✅', lbl:'Terminé' },
+  error:        { col:'var(--red)',     bg:'var(--red-bg)',     ico:'❌', lbl:'Erreur' },
+  cancelled:    { col:'var(--text3)',   bg:'var(--s3)',         ico:'⛔', lbl:'Annulé' },
+};
+
 // ================================================================
 // STATE
 // ================================================================
@@ -465,8 +523,12 @@ const api = {
   createP:      (d)     => req('/voices/', { method:'POST', body:JSON.stringify(d) }),
   deleteP:      (id)    => req(`/voices/${id}`, { method:'DELETE' }),
   upload:       (id, f) => { const fd=new FormData(); fd.append('file',f); return req(`/voices/${id}/samples`,{method:'POST',raw:true,body:fd}); },
-  synthesize:   (id, d) => req(`/synthesis/${id}`, { method:'POST', body:JSON.stringify(d) }),
-  outputs:      (id)    => req(`/synthesis/${id}/outputs`),
+  synthesize:        (id, d)  => req(`/synthesis/${id}`, { method:'POST', body:JSON.stringify(d) }),
+  outputs:           (id)     => req(`/synthesis/${id}/outputs`),
+  deleteOutput:      (id, fn) => req(`/synthesis/${id}/outputs/${encodeURIComponent(fn)}`, { method:'DELETE' }),
+  deleteAllOutputs:  (id)     => req(`/synthesis/${id}/outputs`, { method:'DELETE' }),
+  samples:           (id)     => req(`/voices/${id}/samples`),
+  deleteSample:      (id, fn) => req(`/voices/${id}/samples/${encodeURIComponent(fn)}`, { method:'DELETE' }),
   ftStart:      (id)    => req(`/finetune/${id}`, { method:'POST' }),
   ftStatus:     (id)    => req(`/finetune/${id}/status`),
   ftCancel:     (id)    => req(`/finetune/${id}/cancel`, { method:'DELETE' }),
@@ -477,6 +539,9 @@ const api = {
 // INIT
 // ================================================================
 async function init() {
+  // Peuplement du select de voix preset (modal de creation)
+  document.getElementById('cpv').innerHTML = buildVoiceOptions('fr_male');
+
   try {
     await api.health();
     setDot(true);
@@ -513,9 +578,8 @@ function renderList() {
     return;
   }
   el.innerHTML = S.profiles.map(p => {
-    const catInfo = {clone:'🎤 Clone',preset:'🤖 Preset',game:'🎮 Jeu'};
-    const sub = p.category && catInfo[p.category]
-      ? catInfo[p.category] + (p.tags ? ` · ${p.tags.split(',')[0].trim()}` : '')
+    const sub = p.category && CAT_LABELS[p.category]
+      ? CAT_LABELS[p.category] + (p.tags ? ` · ${p.tags.split(',')[0].trim()}` : '')
       : `${p.sample_count} sample${p.sample_count!==1?'s':''} · ${fmtDur(p.total_duration_s)}`;
     return `
     <div class="p-item ${S.sel?.id===p.id?'active':''}" onclick="pick(${p.id})">
@@ -562,16 +626,14 @@ function renderPV() {
   if (!S.sel) return;
   const p = S.sel;
   document.getElementById('pv-name').textContent = p.name;
-  const engineLabels = { chatterbox: '⚡ Chatterbox', f5tts: '✨ F5-TTS', voxtral: '🌟 Voxtral-4B', xttsv2: '🧬 XTTS-v2' };
-  const catLabels = { clone:'🎤 Clone', preset:'🤖 TTS direct', game:'🎮 Jeu' };
   const engineEl = document.getElementById('pv-engine');
-  engineEl.textContent = engineLabels[p.engine] || p.engine;
+  engineEl.textContent = ENGINE_LABELS[p.engine] || p.engine;
   // Badge categorie
   let catEl = document.getElementById('pv-cat');
   if (!catEl) { catEl=document.createElement('span'); catEl.id='pv-cat'; engineEl.parentNode.insertBefore(catEl,engineEl.nextSibling); }
   if (p.category) {
     catEl.className = 'cat-badge cat-'+p.category;
-    catEl.textContent = catLabels[p.category]||p.category;
+    catEl.textContent = CAT_LABELS[p.category]||p.category;
     catEl.style.display='';
   } else { catEl.style.display='none'; }
   const sb = document.getElementById('pv-status');
@@ -641,13 +703,21 @@ function tSamples() {
       </div>
       <button class="btn btn-p" style="flex-shrink:0;font-size:12px" onclick="go('synthesis')">Synthétiser →</button>
     </div>` : ''}
+    ${!isPreset ? `
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);border-radius:var(--r);margin-bottom:14px">
+      <span style="font-size:18px;flex-shrink:0">🔬</span>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--yellow)">Clonage vocal — disponible prochainement</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:3px;line-height:1.6">Le clonage zero-shot à partir de vos samples nécessite les poids de l'encodeur audio de Voxtral, non inclus dans le checkpoint open-source actuel. Vous pouvez déjà uploader vos samples — ils seront utilisés dès que cette fonctionnalité sera activée. En attendant, la voix preset sélectionnée est utilisée pour la synthèse.</div>
+      </div>
+    </div>` : ''}
     <div class="tips">
       <div class="ttitle">💡 Conseils${p.engine === 'voxtral' ? ' · Voxtral-4B' : ''}</div>
       <ul class="tlist">
         ${p.engine === 'voxtral' ? `
+        <li>Uploadez vos samples dès maintenant — ils seront utilisés pour le clonage dès son activation</li>
         <li>2 à 30 secondes de référence suffisent pour un clonage de qualité</li>
-        <li>Notez la transcription exacte — à renseigner dans l'onglet Synthèse pour améliorer la fidélité</li>
-        <li>Sans sample : la voix preset sélectionnée sera utilisée directement</li>
+        <li>Notez la transcription exacte — utile pour améliorer la fidélité à l'activation</li>
         <li>Formats : WAV, MP3, FLAC, OGG, M4A (max 50 Mo par fichier)</li>
         ` : `
         <li>10 à 30 secondes minimum pour de bons résultats</li>
@@ -714,17 +784,7 @@ function ftCard(p) {
   const isDone    = st === 'done';
   const isError   = st === 'error';
 
-  // Couleur et label du statut
-  const stConf = {
-    none:         { col:'var(--text3)',      bg:'var(--s3)',          ico:'⬜', lbl:'Non effectué' },
-    pending:      { col:'var(--yellow)',     bg:'var(--yellow-bg)',   ico:'⏳', lbl:'En attente…' },
-    transcribing: { col:'var(--accent2)',    bg:'var(--accent-bg)',   ico:'🎙️', lbl:'Transcription…' },
-    preparing:    { col:'var(--accent2)',    bg:'var(--accent-bg)',   ico:'📦', lbl:'Préparation dataset…' },
-    training:     { col:'var(--accent2)',    bg:'var(--accent-bg)',   ico:'🧠', lbl:'Entraînement…' },
-    done:         { col:'var(--green)',      bg:'var(--green-bg)',    ico:'✅', lbl:'Terminé' },
-    error:        { col:'var(--red)',        bg:'var(--red-bg)',      ico:'❌', lbl:'Erreur' },
-    cancelled:    { col:'var(--text3)',      bg:'var(--s3)',          ico:'⛔', lbl:'Annulé' },
-  }[st] || { col:'var(--text3)', bg:'var(--s3)', ico:'❓', lbl: st };
+  const stConf = FT_STATUS[st] || { col:'var(--text3)', bg:'var(--s3)', ico:'❓', lbl: st };
 
   const statusBadge = `<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:${stConf.col};background:${stConf.bg};padding:3px 10px;border-radius:20px">${stConf.ico} ${stConf.lbl}</span>`;
 
@@ -882,30 +942,8 @@ function tSynth() {
       <div class="fg">
         <label class="fl">Voix preset <span style="color:var(--text3)">(utilisée si aucun sample n'est trouvé)</span></label>
         <select class="fsel" id="voxtral-voice">
-          <option value="">— Clonage vocal depuis les samples uploadés —</option>
-          <optgroup label="Anglais">
-            <option value="casual_male">casual_male</option>
-            <option value="casual_female">casual_female</option>
-            <option value="cheerful_female">cheerful_female</option>
-            <option value="neutral_male">neutral_male</option>
-            <option value="neutral_female">neutral_female</option>
-          </optgroup>
-          <optgroup label="Français">
-            <option value="fr_male">fr_male</option>
-            <option value="fr_female">fr_female</option>
-          </optgroup>
-          <optgroup label="Autres langues">
-            <option value="es_male">es_male</option>
-            <option value="es_female">es_female</option>
-            <option value="de_male">de_male</option>
-            <option value="de_female">de_female</option>
-            <option value="it_male">it_male</option>
-            <option value="it_female">it_female</option>
-            <option value="pt_male">pt_male</option>
-            <option value="pt_female">pt_female</option>
-            <option value="nl_male">nl_male</option>
-            <option value="nl_female">nl_female</option>
-          </optgroup>
+          <option value="" disabled>— Clonage vocal (disponible prochainement) —</option>
+          ${buildVoiceOptions(p.preset_voice || 'fr_male')}
         </select>
       </div>
       <div class="fg">
@@ -913,15 +951,10 @@ function tSynth() {
         <textarea class="fi" id="voxtral-reftext" rows="2" placeholder="Texte exact prononcé dans votre sample audio uploadé…" style="min-height:60px"></textarea>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">Fournir la transcription améliore significativement la fidélité du clonage vocal.</div>
       </div>
-      ${!p.sample_count && p.preset_voice ? `
       <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--green-bg);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);margin-bottom:10px">
         <span style="font-size:13px">🤖</span>
-        <span style="font-size:12px;color:var(--green);font-weight:500">Mode TTS direct · Voix preset : <strong>${p.preset_voice}</strong> · 24 kHz</span>
-      </div>` : `
-      <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--accent-bg);border:1px solid rgba(139,92,246,.25);border-radius:var(--r);margin-bottom:10px">
-        <span style="font-size:13px">🌟</span>
-        <span style="font-size:12px;color:var(--accent2);font-weight:500">${p.sample_count} sample${p.sample_count > 1 ? 's' : ''} · Voxtral-4B — zero-shot cloning · 24 kHz</span>
-      </div>`}
+        <span style="font-size:12px;color:var(--green);font-weight:500">Mode TTS direct · Voix preset : <strong>${document.getElementById('voxtral-voice')?.value || p.preset_voice || 'fr_male'}</strong> · 24 kHz</span>
+      </div>
       <div style="display:flex;align-items:flex-start;gap:8px;padding:9px 12px;background:var(--yellow-bg);border:1px solid rgba(245,158,11,.2);border-radius:var(--r)">
         <span style="font-size:13px;flex-shrink:0">⚠️</span>
         <span style="font-size:11px;color:var(--yellow);line-height:1.6">Serveur vLLM requis sur le port 8001 :<br><code style="color:var(--text2);font-size:10px">vllm serve mistralai/Voxtral-4B-TTS-2603 --omni --port 8001</code></span>
@@ -1214,16 +1247,171 @@ function toast(msg, type='inf') {
 function x(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtDur(s){ if(!s)return'0s'; if(s<60)return`${Math.round(s)}s`; return`${Math.floor(s/60)}m${Math.round(s%60)}s`; }
 function fmt(s){ if(!s||isNaN(s))return'0:00'; return`${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`; }
-function pEmoji(p){ const cm={game:'🎮',preset:'🤖',clone:'🎤'}; return cm[p.category]||(p.status==='ready'?'🎙️':'⏳'); }
 function sbCls(s){ return{ready:'sb-ready',error:'sb-error',processing:'sb-processing'}[s]||'sb-ready'; }
 function sbLbl(s){ return{ready:'Prêt',error:'Erreur',processing:'Traitement'}[s]||s; }
+function pEmoji(p){ return CAT_EMOJI[p.category]||(p.status==='ready'?'🎙️':'⏳'); }
 
-function bind() {}
+function buildVoiceOptions(selected) {
+  return Object.entries(VOXTRAL_VOICES).map(([grp, voices]) =>
+    `<optgroup label="${grp}">${voices.map(v =>
+      `<option value="${v}"${v === selected ? ' selected' : ''}>${v}</option>`
+    ).join('')}</optgroup>`
+  ).join('');
+}
+
+// ================================================================
+// SETTINGS
+// ================================================================
+async function openSettings() {
+  document.getElementById('sp').classList.add('open');
+  await renderSettings();
+}
+
+function closeSettings(e) {
+  if (e && e.target !== document.getElementById('sp')) return;
+  document.getElementById('sp').classList.remove('open');
+}
+
+async function renderSettings() {
+  const body = document.getElementById('sp-body');
+  body.innerHTML = '<div style="text-align:center;color:var(--text3);padding:40px">Chargement…</div>';
+  try {
+    const profiles = await api.profiles();
+    // Charger samples + outputs pour chaque profil en parallele
+    const data = await Promise.all(profiles.map(async p => {
+      const [samples, outputs] = await Promise.all([
+        api.samples(p.id).catch(()=>[]),
+        api.outputs(p.id).catch(()=>[]),
+      ]);
+      return { ...p, _samples: samples, _outputs: outputs };
+    }));
+
+    const totalSamples  = data.reduce((n, p) => n + p._samples.length, 0);
+    const totalOutputs  = data.reduce((n, p) => n + p._outputs.length, 0);
+    const totalSize     = data.reduce((n, p) =>
+      n + p._samples.reduce((s,f) => s+f.size_bytes, 0)
+        + p._outputs.reduce((s,f) => s+f.size_bytes, 0), 0);
+
+    const fmtSize = b => b > 1048576 ? (b/1048576).toFixed(1)+' Mo' : b > 1024 ? (b/1024).toFixed(0)+' Ko' : b+' o';
+
+    const statsHtml = `
+      <div class="sp-stats">
+        <div class="scard"><div class="sval">${data.length}</div><div class="slbl">Profils</div></div>
+        <div class="scard"><div class="sval">${totalSamples}</div><div class="slbl">Samples</div></div>
+        <div class="scard"><div class="sval">${totalOutputs}</div><div class="slbl">Synthèses</div></div>
+        <div class="scard"><div class="sval" style="font-size:16px">${fmtSize(totalSize)}</div><div class="slbl">Disque utilisé</div></div>
+      </div>`;
+
+
+    const cardsHtml = data.map(p => {
+      const sampleRows = p._samples.length
+        ? p._samples.map(s => `
+          <div class="sp-fitem">
+            <span style="font-size:12px">🎵</span>
+            <span class="sp-fname">${x(s.filename)}</span>
+            <span class="sp-fsize">${fmtDur(s.duration_s)} · ${fmtSize(s.size_bytes)}</span>
+            <button class="sp-fdel" title="Supprimer ce sample" onclick="spDelSample(${p.id},'${x(s.filename)}',this)">🗑</button>
+          </div>`).join('')
+        : '<div class="sp-empty">Aucun sample</div>';
+
+      const outputRows = p._outputs.length
+        ? p._outputs.map(o => `
+          <div class="sp-fitem">
+            <span style="font-size:12px">🔊</span>
+            <span class="sp-fname">${x(o.filename)}</span>
+            <span class="sp-fsize">${fmtSize(o.size_bytes)}</span>
+            <button class="sp-fdel" title="Supprimer cette synthèse" onclick="spDelOutput(${p.id},'${x(o.filename)}',this)">🗑</button>
+          </div>`).join('')
+        : '<div class="sp-empty">Aucune synthèse</div>';
+
+      const samplesSz = p._samples.reduce((n,s) => n+s.size_bytes, 0);
+      const outputsSz = p._outputs.reduce((n,o) => n+o.size_bytes, 0);
+
+      return `
+        <div class="sp-pcard" id="spcard-${p.id}">
+          <div class="sp-pcard-head">
+            <div style="display:flex;align-items:center;gap:9px;min-width:0">
+              <span style="font-size:17px;flex-shrink:0">${pEmoji(p)}</span>
+              <div style="min-width:0">
+                <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x(p.name)}</div>
+                <div style="font-size:10px;color:var(--text3);margin-top:1px">${CAT_LABELS[p.category]||''} · ${ENGINE_LABELS[p.engine]||p.engine}</div>
+              </div>
+            </div>
+            <button class="btn btn-d" style="font-size:11px;padding:4px 10px;flex-shrink:0" onclick="spDelProfile(${p.id},'${x(p.name)}')">🗑 Supprimer le profil</button>
+          </div>
+          <div class="sp-pcard-body">
+            <div class="sp-section">
+              <div class="sp-section-title">
+                <span>🎵 Samples (${p._samples.length}) · ${fmtSize(samplesSz)}</span>
+              </div>
+              ${sampleRows}
+            </div>
+            <div class="sp-section">
+              <div class="sp-section-title">
+                <span>🔊 Synthèses (${p._outputs.length}) · ${fmtSize(outputsSz)}</span>
+                ${p._outputs.length ? `<button class="btn btn-d" style="font-size:10px;padding:3px 9px" onclick="spClearOutputs(${p.id})">Tout supprimer</button>` : ''}
+              </div>
+              ${outputRows}
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    body.innerHTML = statsHtml + (data.length ? cardsHtml : '<div style="text-align:center;color:var(--text3);padding:40px">Aucun profil enregistré.</div>');
+  } catch(e) {
+    body.innerHTML = `<div style="text-align:center;color:var(--red);padding:40px">Erreur de chargement : ${x(e.message)}</div>`;
+  }
+}
+
+async function spDelSample(pid, filename, btn) {
+  btn.disabled = true;
+  try {
+    await api.deleteSample(pid, filename);
+    toast('Sample supprimé', 'inf');
+    // Reload only the stats + this profile card
+    await renderSettings();
+    if (S.sel?.id === pid) { S.sel = await api.profile(pid); renderPV(); renderList(); renderTab(); }
+  } catch(e) { toast('Erreur : '+e.message, 'err'); btn.disabled=false; }
+}
+
+async function spDelOutput(pid, filename, btn) {
+  btn.disabled = true;
+  try {
+    await api.deleteOutput(pid, filename);
+    toast('Synthèse supprimée', 'inf');
+    await renderSettings();
+    if (S.sel?.id === pid) { await loadOutputs(); renderPV(); renderTab(); }
+  } catch(e) { toast('Erreur : '+e.message, 'err'); btn.disabled=false; }
+}
+
+async function spClearOutputs(pid) {
+  openConf('🗑️ Vider les synthèses', 'Supprimer toutes les synthèses de ce profil ? Cette action est irréversible.', async () => {
+    try {
+      await api.deleteAllOutputs(pid);
+      toast('Synthèses supprimées', 'inf');
+      await renderSettings();
+      if (S.sel?.id === pid) { await loadOutputs(); renderPV(); renderTab(); }
+    } catch(e) { toast('Erreur : '+e.message, 'err'); }
+  });
+}
+
+async function spDelProfile(pid, name) {
+  openConf('🗑️ Supprimer le profil', `Supprimer "${name}" ? Tous les samples et synthèses seront perdus. Cette action est irréversible.`, async () => {
+    try {
+      await api.deleteP(pid);
+      toast(`Profil "${name}" supprimé`, 'inf');
+      await renderSettings();
+      await loadProfiles();
+      if (S.sel?.id === pid) clearSel();
+    } catch(e) { toast('Erreur : '+e.message, 'err'); }
+  });
+}
 
 // Modals close on overlay click
 document.getElementById('cm').onclick = e => { if(e.target===e.currentTarget) closeCreate(); };
 document.getElementById('conf').onclick = e => { if(e.target===e.currentTarget) closeConf(); };
-document.addEventListener('keydown', e => { if(e.key==='Escape'){closeCreate();closeConf();} });
+document.getElementById('sp').onclick = e => { if(e.target===document.getElementById('sp')) closeSettings(e); };
+document.addEventListener('keydown', e => { if(e.key==='Escape'){closeCreate();closeConf();document.getElementById('sp').classList.remove('open');} });
 
 // Enter on modal name
 document.getElementById('cn').onkeydown = e => { if(e.key==='Enter') doCreate(); };

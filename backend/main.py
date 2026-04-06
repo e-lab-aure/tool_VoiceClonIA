@@ -17,6 +17,8 @@ from backend.core.config import HOST, PORT
 from backend.core.database import init_db
 from backend.core.logger import logger
 
+_APP_VERSION = "0.1.0"
+
 # Chemin vers l'interface web
 _UI_FILE = Path(__file__).resolve().parents[1] / "frontend" / "index.html"
 
@@ -42,7 +44,7 @@ app = FastAPI(
         "Clone une voix à partir de fichiers audio de référence "
         "avec consentement explicite obligatoire."
     ),
-    version="0.1.0",
+    version=_APP_VERSION,
     lifespan=lifespan,
     # Désactive les détails d'erreur en production (à configurer via env)
     docs_url="/docs",
@@ -67,7 +69,7 @@ app.include_router(finetune.router)
 @app.get("/", tags=["Santé"])
 def health_check() -> dict:
     """Endpoint de vérification de santé du serveur."""
-    return {"status": "ok", "app": "VoiceClonIA", "version": "0.1.0"}
+    return {"status": "ok", "app": "VoiceClonIA", "version": _APP_VERSION}
 
 
 @app.get("/ui", response_class=HTMLResponse, include_in_schema=False)

@@ -415,17 +415,12 @@ class VoxtralEngine(TTSEngine):
         }
 
         if reference_audio is not None:
-            # vLLM Omni attend une URL HTTP accessible (pas base64).
-            # Le container tourne avec --network=host donc il peut fetcher localhost.
-            ref_url = _build_sample_url(reference_audio)
-            payload["task_type"] = "Base"
-            payload["ref_audio"] = ref_url
-            if ref_text:
-                payload["ref_text"] = ref_text
-            logger.info(
-                "Voxtral clonage vocal — ref_audio=%s ref_text=%s",
-                ref_url,
-                bool(ref_text),
+            # Le clonage vocal Voxtral nécessite les poids de l'encodeur audio,
+            # non disponibles dans le checkpoint open-source. Fonctionnalité à venir.
+            raise RuntimeError(
+                "Le clonage vocal n'est pas disponible avec le modèle open-source "
+                "Voxtral-4B-TTS-2603 (encodeur audio propriétaire requis). "
+                "Sélectionnez une voix preset pour synthétiser."
             )
         else:
             preset = voice or VOXTRAL_DEFAULT_VOICE

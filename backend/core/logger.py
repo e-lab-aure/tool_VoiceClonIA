@@ -5,6 +5,7 @@ Format uniforme : [LEVEL] YYYY-MM-DD HH:MM:SS — context — message
 Sortie vers fichier (persistant) et console (développement).
 """
 
+import io
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
@@ -53,7 +54,6 @@ def setup_logger(name: str = "voicelconia") -> logging.Logger:
 
     # Handler console (stdout) pour le développement
     # Force UTF-8 sur Windows (évite UnicodeEncodeError avec cp1252)
-    import io
     utf8_stream = io.TextIOWrapper(
         sys.stdout.buffer, encoding="utf-8", line_buffering=True
     )

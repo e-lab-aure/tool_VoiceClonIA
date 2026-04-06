@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from backend.core.database import SessionLocal, get_db
 from backend.core.logger import logger
+from backend.core.utils import get_profile_or_404
 from backend.models.voice_profile import ProfileStatus, VoiceProfile
 from backend.services.audio import get_profile_samples
 from backend.services import finetune as ft
@@ -65,7 +66,7 @@ def start_finetune(
     Le fine-tuning prend plusieurs heures. Sondez GET /finetune/{id}/status pour
     suivre la progression.
     """
-    profile = _get_profile_or_404(profile_id, db)
+    profile = get_profile_or_404(profile_id, db)
     _assert_finetune_allowed(profile)
 
     samples = get_profile_samples(profile_id)
@@ -112,7 +113,7 @@ def get_finetune_status(
 
     Si aucun job n'est actif en mémoire, retourne le statut persisté en base.
     """
-    _get_profile_or_404(profile_id, db)
+    get_profile_or_404(profile_id, db)
 
     # Priorité : job actif en mémoire (plus frais)
     job_status = ft.get_status(profile_id)
@@ -146,7 +147,7 @@ def delete_finetune_model(
 
     Attention : irréversible. Le fine-tuning devra être relancé.
     """
-    profile = _get_profile_or_404(profile_id, db)
+    profile = get_profile_or_404(profile_id, db)
 
     ft.delete_model(profile_id)
 
@@ -167,7 +168,7 @@ def cancel_finetune(
     db: Session = Depends(get_db),
 ) -> None:
     """Demande l'annulation coopérative du job de fine-tuning en cours."""
-    _get_profile_or_404(profile_id, db)
+    get_profile_or_404(profile_id, db)
 
     if not ft.cancel_job(profile_id):
         raise HTTPException(
@@ -177,17 +178,6 @@ def cancel_finetune(
 
 
 # --- Utilitaires internes ---
-
-def _get_profile_or_404(profile_id: int, db: Session) -> VoiceProfile:
-    """Retourne un profil par son id ou lève une 404."""
-    profile = db.query(VoiceProfile).filter(VoiceProfile.id == profile_id).first()
-    if not profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profil voix #{profile_id} introuvable.",
-        )
-    return profile
-
 
 def _assert_finetune_allowed(profile: VoiceProfile) -> None:
     """
@@ -199,12 +189,6 @@ def _assert_finetune_allowed(profile: VoiceProfile) -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Ce profil a été révoqué. Le fine-tuning est interdit.",
-        )
-
-    if not profile.has_active_consent:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Consentement actif requis avant le fine-tuning.",
         )
 
 

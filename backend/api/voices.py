@@ -2,13 +2,16 @@
 Routes API — Gestion des profils voix.
 
 Endpoints :
-    POST   /voices/              Créer un profil voix
-    GET    /voices/              Lister tous les profils
-    GET    /voices/{id}          Détail d'un profil
-    POST   /voices/{id}/samples  Uploader un fichier audio de référence
-    DELETE /voices/{id}          Supprimer un profil et ses données
+    POST   /voices/                        Créer un profil voix
+    GET    /voices/                        Lister tous les profils
+    GET    /voices/{id}                    Détail d'un profil
+    POST   /voices/{id}/samples            Uploader un fichier audio de référence
+    GET    /voices/{id}/samples            Lister les samples d'un profil
+    DELETE /voices/{id}/samples/{filename} Supprimer un sample
+    DELETE /voices/{id}                    Supprimer un profil et ses données
 """
 
+import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
@@ -16,9 +19,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from backend.core.config import UPLOAD_DIR
+from backend.core.config import OUTPUT_DIR, UPLOAD_DIR
 from backend.core.database import get_db
 from backend.core.logger import logger
+from backend.core.utils import get_profile_or_404
 from backend.models.voice_profile import ProfileStatus, VoiceProfile
 from backend.services.audio import (
     AudioValidationError,
@@ -62,6 +66,14 @@ class VoiceProfileResponse(BaseModel):
     tags: str | None
 
     model_config = {"from_attributes": True}
+
+
+class SampleInfo(BaseModel):
+    """Métadonnées d'un sample audio."""
+
+    filename: str
+    size_bytes: int
+    duration_s: float
 
 
 class SampleUploadResponse(BaseModel):
@@ -151,7 +163,7 @@ def get_voice_profile(
     db: Session = Depends(get_db),
 ) -> VoiceProfileResponse:
     """Retourne les détails d'un profil voix par son identifiant."""
-    profile = _get_profile_or_404(profile_id, db)
+    profile = get_profile_or_404(profile_id, db)
     return VoiceProfileResponse.model_validate(profile)
 
 
@@ -173,7 +185,7 @@ async def upload_sample(
     Le fichier est validé, normalisé en WAV 16 kHz mono,
     puis associé au profil. Le profil doit exister et ne pas être révoqué.
     """
-    profile = _get_profile_or_404(profile_id, db)
+    profile = get_profile_or_404(profile_id, db)
 
     raw_bytes = await file.read()
     filename = file.filename or "upload.wav"
@@ -252,15 +264,9 @@ def download_sample(
     via URL localhost lors du clonage vocal.
     Le nom de fichier est validé pour prévenir les attaques par path traversal.
     """
-    _get_profile_or_404(profile_id, db)
+    get_profile_or_404(profile_id, db)
 
-    safe_filename = Path(filename).name
-    if safe_filename != filename or not safe_filename.endswith(".wav"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Nom de fichier invalide.",
-        )
-
+    safe_filename = _safe_wav(filename)
     file_path = UPLOAD_DIR / f"profile_{profile_id}" / safe_filename
 
     if not file_path.exists() or not file_path.is_file():
@@ -273,6 +279,83 @@ def download_sample(
         path=str(file_path),
         media_type="audio/wav",
         filename=safe_filename,
+    )
+
+
+@router.get(
+    "/{profile_id}/samples",
+    response_model=list[SampleInfo],
+    summary="Lister les samples d'un profil",
+)
+def list_samples(
+    profile_id: int,
+    db: Session = Depends(get_db),
+) -> list[SampleInfo]:
+    """Retourne les métadonnées des fichiers audio de référence d'un profil."""
+    get_profile_or_404(profile_id, db)
+
+    profile_dir = UPLOAD_DIR / f"profile_{profile_id}"
+    if not profile_dir.exists():
+        return []
+
+    result = []
+    for wav in sorted(profile_dir.glob("*.wav"), key=lambda p: p.stat().st_mtime):
+        size = wav.stat().st_size
+        try:
+            meta = get_audio_metadata(wav)
+            dur = meta["duration_s"]
+        except Exception:
+            dur = 0.0
+        result.append(SampleInfo(filename=wav.name, size_bytes=size, duration_s=dur))
+
+    return result
+
+
+@router.delete(
+    "/{profile_id}/samples/{filename}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Supprimer un sample audio",
+)
+def delete_sample(
+    profile_id: int,
+    filename: str,
+    db: Session = Depends(get_db),
+) -> None:
+    """
+    Supprime un sample audio de référence et met à jour les compteurs du profil.
+
+    Attention : cette opération est irréversible.
+    """
+    profile = get_profile_or_404(profile_id, db)
+
+    safe_filename = _safe_wav(filename)
+    file_path = UPLOAD_DIR / f"profile_{profile_id}" / safe_filename
+
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sample audio introuvable.",
+        )
+
+    # Durée du sample pour mettre à jour le total
+    try:
+        meta = get_audio_metadata(file_path)
+        duration = meta["duration_s"]
+    except Exception:
+        duration = 0.0
+
+    file_path.unlink()
+
+    profile.sample_count = max(0, profile.sample_count - 1)
+    profile.total_duration_s = max(0.0, round(profile.total_duration_s - duration, 2))
+    db.commit()
+
+    logger.info(
+        "Sample supprimé — profil=%d fichier=%s durée=%.2fs restant=%d samples",
+        profile_id,
+        safe_filename,
+        duration,
+        profile.sample_count,
     )
 
 
@@ -291,10 +374,7 @@ def delete_voice_profile(
     Attention : cette opération est irréversible.
     Les fichiers audio sur disque sont également supprimés.
     """
-    import shutil
-    from backend.core.config import UPLOAD_DIR, OUTPUT_DIR
-
-    profile = _get_profile_or_404(profile_id, db)
+    profile = get_profile_or_404(profile_id, db)
 
     # Suppression des fichiers audio sur disque
     for base_dir in (UPLOAD_DIR, OUTPUT_DIR):
@@ -311,12 +391,12 @@ def delete_voice_profile(
 
 # --- Utilitaires internes ---
 
-def _get_profile_or_404(profile_id: int, db: Session) -> VoiceProfile:
-    """Retourne un profil par son id ou lève une 404."""
-    profile = db.query(VoiceProfile).filter(VoiceProfile.id == profile_id).first()
-    if not profile:
+def _safe_wav(filename: str) -> str:
+    """Valide un nom de fichier WAV et previent le path traversal. Retourne le nom sur."""
+    safe = Path(filename).name
+    if safe != filename or not safe.endswith(".wav"):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profil voix #{profile_id} introuvable.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nom de fichier invalide.",
         )
-    return profile
+    return safe

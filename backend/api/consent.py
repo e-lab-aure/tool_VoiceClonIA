@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from backend.core.database import get_db
 from backend.core.logger import logger
+from backend.core.utils import get_profile_or_404
 from backend.models.consent import Consent
 from backend.models.voice_profile import ProfileStatus, VoiceProfile
 
@@ -94,7 +95,7 @@ def record_consent(
     Le champ `accepted` doit être True. Un consentement refusé n'est pas enregistré.
     L'adresse IP est collectée à des fins de traçabilité légale uniquement.
     """
-    profile = _get_profile_or_404(profile_id, db)
+    profile = get_profile_or_404(profile_id, db)
 
     if profile.status == ProfileStatus.REVOKED:
         raise HTTPException(
@@ -147,7 +148,7 @@ def get_consent_status(
     db: Session = Depends(get_db),
 ) -> ConsentStatusResponse:
     """Retourne le statut de consentement actuel d'un profil voix."""
-    profile = _get_profile_or_404(profile_id, db)
+    profile = get_profile_or_404(profile_id, db)
 
     active_consents = [c for c in profile.consents if not c.is_revoked]
     latest = (
@@ -180,7 +181,7 @@ def revoke_consent(
     Après révocation, toute nouvelle synthèse est impossible pour ce profil.
     Les données audio existantes sont conservées jusqu'à suppression manuelle du profil.
     """
-    profile = _get_profile_or_404(profile_id, db)
+    profile = get_profile_or_404(profile_id, db)
 
     now = datetime.now(timezone.utc)
     revoked_count = 0
@@ -210,17 +211,6 @@ def revoke_consent(
 
 
 # --- Utilitaires internes ---
-
-def _get_profile_or_404(profile_id: int, db: Session) -> VoiceProfile:
-    """Retourne un profil par son id ou lève une 404."""
-    profile = db.query(VoiceProfile).filter(VoiceProfile.id == profile_id).first()
-    if not profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profil voix #{profile_id} introuvable.",
-        )
-    return profile
-
 
 def _extract_client_ip(request: Request) -> str | None:
     """

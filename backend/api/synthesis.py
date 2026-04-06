@@ -7,10 +7,13 @@ La synthèse est conditionnée à :
 3. La disponibilité d'au moins un sample audio de référence
 
 Endpoints :
-    POST /synthesis/{profile_id}         Générer un audio à partir d'un texte
-    GET  /synthesis/{profile_id}/outputs Lister les fichiers générés
+    POST   /synthesis/{profile_id}                    Générer un audio à partir d'un texte
+    GET    /synthesis/{profile_id}/outputs             Lister les fichiers générés
+    DELETE /synthesis/{profile_id}/outputs             Supprimer tous les outputs d'un profil
+    DELETE /synthesis/{profile_id}/outputs/{filename}  Supprimer un output spécifique
 """
 
+import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -21,6 +24,7 @@ from sqlalchemy.orm import Session
 from backend.core.config import OUTPUT_DIR
 from backend.core.database import get_db
 from backend.core.logger import logger
+from backend.core.utils import get_profile_or_404
 from backend.models.voice_profile import ProfileStatus, VoiceProfile
 from backend.services.audio import get_profile_samples
 from backend.services.tts import synthesize_speech
@@ -107,7 +111,7 @@ def synthesize(
     - Consentement actif présent
     - Au moins un sample de référence disponible
     """
-    profile = _get_profile_or_404(profile_id, db)
+    profile = get_profile_or_404(profile_id, db)
 
     if profile.status == ProfileStatus.ERROR:
         raise HTTPException(
@@ -184,7 +188,7 @@ def list_outputs(
     db: Session = Depends(get_db),
 ) -> list[OutputFile]:
     """Retourne la liste des fichiers audio générés pour un profil."""
-    _get_profile_or_404(profile_id, db)
+    get_profile_or_404(profile_id, db)
 
     profile_output_dir = OUTPUT_DIR / f"profile_{profile_id}"
     if not profile_output_dir.exists():
@@ -217,16 +221,9 @@ def download_output(
 
     Le nom de fichier est validé pour prévenir les attaques par path traversal.
     """
-    _get_profile_or_404(profile_id, db)
+    get_profile_or_404(profile_id, db)
 
-    # Validation stricte du nom de fichier — aucun composant de chemin autorisé
-    safe_filename = Path(filename).name
-    if safe_filename != filename or not safe_filename.endswith(".wav"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Nom de fichier invalide.",
-        )
-
+    safe_filename = _safe_wav(filename)
     file_path = OUTPUT_DIR / f"profile_{profile_id}" / safe_filename
 
     if not file_path.exists() or not file_path.is_file():
@@ -242,14 +239,67 @@ def download_output(
     )
 
 
-# --- Utilitaires internes ---
+@router.delete(
+    "/{profile_id}/outputs",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Supprimer tous les fichiers audio générés d'un profil",
+)
+def delete_all_outputs(
+    profile_id: int,
+    db: Session = Depends(get_db),
+) -> None:
+    """
+    Supprime tous les fichiers audio générés pour un profil.
 
-def _get_profile_or_404(profile_id: int, db: Session) -> VoiceProfile:
-    """Retourne un profil par son id ou lève une 404."""
-    profile = db.query(VoiceProfile).filter(VoiceProfile.id == profile_id).first()
-    if not profile:
+    Attention : cette opération est irréversible.
+    """
+    get_profile_or_404(profile_id, db)
+
+    profile_output_dir = OUTPUT_DIR / f"profile_{profile_id}"
+    if profile_output_dir.exists():
+        shutil.rmtree(profile_output_dir)
+        logger.info("Outputs supprimés — profil=%d dossier=%s", profile_id, profile_output_dir)
+
+
+@router.delete(
+    "/{profile_id}/outputs/{filename}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Supprimer un fichier audio généré",
+)
+def delete_output(
+    profile_id: int,
+    filename: str,
+    db: Session = Depends(get_db),
+) -> None:
+    """
+    Supprime un fichier audio généré spécifique.
+
+    Attention : cette opération est irréversible.
+    Le nom de fichier est validé pour prévenir les attaques par path traversal.
+    """
+    get_profile_or_404(profile_id, db)
+
+    safe_filename = _safe_wav(filename)
+    file_path = OUTPUT_DIR / f"profile_{profile_id}" / safe_filename
+
+    if not file_path.exists() or not file_path.is_file():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profil voix #{profile_id} introuvable.",
+            detail="Fichier audio introuvable.",
         )
-    return profile
+
+    file_path.unlink()
+    logger.info("Output supprimé — profil=%d fichier=%s", profile_id, safe_filename)
+
+
+# --- Utilitaires internes ---
+
+def _safe_wav(filename: str) -> str:
+    """Valide un nom de fichier WAV et previent le path traversal. Retourne le nom sur."""
+    safe = Path(filename).name
+    if safe != filename or not safe.endswith(".wav"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nom de fichier invalide.",
+        )
+    return safe

@@ -55,7 +55,6 @@ class VoiceProfileResponse(BaseModel):
     sample_count: int
     total_duration_s: float
     engine: str
-    has_active_consent: bool
     # Statut du fine-tuning XTTS-v2 : None | pending | running | done | error | cancelled
     fine_tune_status: str | None
     category: str | None
@@ -88,12 +87,7 @@ def create_voice_profile(
     payload: VoiceProfileCreate,
     db: Session = Depends(get_db),
 ) -> VoiceProfileResponse:
-    """
-    Crée un nouveau profil voix en attente de consentement.
-
-    Le profil est créé avec le statut PENDING_CONSENT.
-    Un consentement explicite doit être enregistré avant toute synthèse.
-    """
+    """Crée un nouveau profil voix avec le statut READY."""
     # Vérifie l'unicité du nom
     existing = db.query(VoiceProfile).filter(VoiceProfile.name == payload.name).first()
     if existing:
@@ -123,7 +117,7 @@ def create_voice_profile(
         name=payload.name,
         description=payload.description,
         engine=payload.engine,
-        status=ProfileStatus.PENDING_CONSENT,
+        status=ProfileStatus.READY,
         category=payload.category,
         preset_voice=payload.preset_voice,
         tags=payload.tags,
@@ -181,12 +175,6 @@ async def upload_sample(
     """
     profile = _get_profile_or_404(profile_id, db)
 
-    if profile.status == ProfileStatus.REVOKED:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Ce profil a été révoqué. Aucun ajout de sample n'est autorisé.",
-        )
-
     raw_bytes = await file.read()
     filename = file.filename or "upload.wav"
 
@@ -226,10 +214,6 @@ async def upload_sample(
     profile.sample_count += 1
     profile.total_duration_s = round(profile.total_duration_s + metadata["duration_s"], 2)
     profile.sample_dir = f"profile_{profile_id}"
-
-    # Passage en READY si au moins un consentement actif existe
-    if profile.status == ProfileStatus.PENDING_CONSENT and profile.has_active_consent:
-        profile.status = ProfileStatus.READY
 
     db.commit()
 

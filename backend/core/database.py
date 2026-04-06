@@ -49,7 +49,7 @@ def init_db() -> None:
     Les modèles doivent être importés avant cet appel pour être enregistrés.
     """
     # Import des modèles pour les enregistrer auprès de la Base avant création
-    from backend.models import consent, voice_profile  # noqa: F401
+    from backend.models import voice_profile  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _migrate_add_columns()

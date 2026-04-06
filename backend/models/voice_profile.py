@@ -1,15 +1,15 @@
 """
 Modèle ORM pour les profils voix.
 
-Un profil voix regroupe les fichiers audio d'un locuteur,
-le consentement associé, et les métadonnées de clonage.
+Un profil voix regroupe les fichiers audio d'un locuteur
+et les métadonnées de clonage.
 """
 
 from datetime import datetime, timezone
 from enum import Enum as PyEnum
 
 from sqlalchemy import DateTime, Enum, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.core.database import Base
 
@@ -17,11 +17,9 @@ from backend.core.database import Base
 class ProfileStatus(str, PyEnum):
     """États du cycle de vie d'un profil voix."""
 
-    PENDING_CONSENT = "pending_consent"  # En attente de consentement
-    READY = "ready"                       # Prêt à être utilisé pour la synthèse
-    PROCESSING = "processing"             # Entraînement/clonage en cours
-    ERROR = "error"                       # Erreur lors du traitement
-    REVOKED = "revoked"                   # Consentement révoqué — profil désactivé
+    READY = "ready"             # Prêt à être utilisé pour la synthèse
+    PROCESSING = "processing"   # Entraînement/clonage en cours
+    ERROR = "error"             # Erreur lors du traitement
 
 
 class VoiceProfile(Base):
@@ -52,7 +50,7 @@ class VoiceProfile(Base):
 
     status: Mapped[ProfileStatus] = mapped_column(
         Enum(ProfileStatus),
-        default=ProfileStatus.PENDING_CONSENT,
+        default=ProfileStatus.READY,
         nullable=False,
     )
 
@@ -93,17 +91,6 @@ class VoiceProfile(Base):
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
-
-    # Relations
-    consents: Mapped[list["Consent"]] = relationship(  # noqa: F821
-        back_populates="voice_profile",
-        cascade="all, delete-orphan",
-    )
-
-    @property
-    def has_active_consent(self) -> bool:
-        """Retourne True si au moins un consentement non révoqué existe."""
-        return any(not c.is_revoked for c in self.consents)
 
     def __repr__(self) -> str:
         return f"<VoiceProfile id={self.id} name='{self.name}' status={self.status}>"

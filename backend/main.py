@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
-from backend.api import consent, finetune, synthesis, voices
+from backend.api import finetune, synthesis, voices
 from backend.core.config import HOST, PORT
 from backend.core.database import init_db
 from backend.core.logger import logger
@@ -60,7 +60,6 @@ app.add_middleware(
 
 # Enregistrement des routers
 app.include_router(voices.router)
-app.include_router(consent.router)
 app.include_router(synthesis.router)
 app.include_router(finetune.router)
 

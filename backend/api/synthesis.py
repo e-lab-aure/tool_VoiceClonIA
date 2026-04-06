@@ -109,8 +109,11 @@ def synthesize(
     """
     profile = _get_profile_or_404(profile_id, db)
 
-    # Vérification du statut et du consentement
-    _assert_synthesis_allowed(profile)
+    if profile.status == ProfileStatus.ERROR:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Ce profil est en erreur. Vérifiez les samples uploadés.",
+        )
 
     # Récupération de tous les samples de référence du profil
     samples = get_profile_samples(profile_id)
@@ -250,35 +253,3 @@ def _get_profile_or_404(profile_id: int, db: Session) -> VoiceProfile:
             detail=f"Profil voix #{profile_id} introuvable.",
         )
     return profile
-
-
-def _assert_synthesis_allowed(profile: VoiceProfile) -> None:
-    """
-    Vérifie que la synthèse est autorisée pour ce profil.
-
-    Lève une HTTPException si une condition bloquante est détectée.
-    """
-    if profile.status == ProfileStatus.REVOKED:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Ce profil a été révoqué. La synthèse vocale est interdite.",
-        )
-
-    if profile.status == ProfileStatus.PENDING_CONSENT:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Consentement requis avant toute synthèse. "
-                   "Enregistrez un consentement via POST /consent/{profile_id}.",
-        )
-
-    if not profile.has_active_consent:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Aucun consentement actif pour ce profil. La synthèse est bloquée.",
-        )
-
-    if profile.status == ProfileStatus.ERROR:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Ce profil est en erreur. Vérifiez les samples uploadés.",
-        )

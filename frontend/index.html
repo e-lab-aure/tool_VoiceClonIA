@@ -58,9 +58,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .p-name{font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .p-sub{font-size:11px;color:var(--text3);margin-top:1px}
 .sbadge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;text-transform:uppercase;letter-spacing:.4px;flex-shrink:0}
-.sb-pending{background:var(--yellow-bg);color:var(--yellow)}
 .sb-ready{background:var(--green-bg);color:var(--green)}
-.sb-revoked{background:var(--red-bg);color:var(--red)}
 .sb-error{background:var(--red-bg);color:var(--red)}
 .sb-processing{background:var(--accent-bg);color:var(--accent2)}
 
@@ -141,14 +139,6 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
 .spin{position:relative;pointer-events:none;opacity:.7}
 .spin::after{content:'';position:absolute;right:14px;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:rot .7s linear infinite}
 @keyframes rot{to{transform:rotate(360deg)}}
-
-/* ── CONSENT ── */
-.ctext{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:13px;font-size:12px;color:var(--text2);line-height:1.75;margin-bottom:14px;max-height:110px;overflow-y:auto}
-.consent-ok{display:flex;align-items:center;gap:12px;padding:13px;background:var(--green-bg);border:1px solid rgba(16,185,129,.2);border-radius:var(--r)}
-.cok-ico{font-size:22px}
-.cok-by{font-weight:600;color:var(--green)}
-.cok-date{font-size:11px;color:var(--text2);margin-top:2px}
-.revoked-box{padding:13px;background:var(--red-bg);border:1px solid rgba(239,68,68,.2);border-radius:var(--r);font-size:13px;color:var(--red);line-height:1.6}
 
 /* ── DRAG DROP ── */
 .dropz{border:2px dashed var(--border2);border-radius:var(--r-lg);padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s ease;background:var(--s2);position:relative;margin-bottom:14px}
@@ -341,18 +331,13 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
 
         <!-- Steps -->
         <div class="steps">
-          <div class="step" id="s1" onclick="go('consent')">
+          <div class="step" id="s1" onclick="go('samples')">
             <div class="snum" id="n1">1</div>
-            <span class="slabel">Consentement</span>
-          </div>
-          <div class="sep"></div>
-          <div class="step" id="s2" onclick="go('samples')">
-            <div class="snum" id="n2">2</div>
             <span class="slabel">Samples</span>
           </div>
           <div class="sep"></div>
-          <div class="step" id="s3" onclick="go('synthesis')">
-            <div class="snum" id="n3">3</div>
+          <div class="step" id="s2" onclick="go('synthesis')">
+            <div class="snum" id="n2">2</div>
             <span class="slabel">Synthèse</span>
           </div>
         </div>
@@ -448,9 +433,8 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
 const S = {
   profiles: [],
   sel: null,       // selected profile object
-  tab: 'consent',
+  tab: 'samples',
   outputs: [],
-  cstatus: null,   // consent status
   ftProgress: 0,   // progression fine-tuning (0.0–1.0)
   ftMessage: '',   // message de progression
   ftError: null,   // message d'erreur fine-tuning
@@ -480,9 +464,6 @@ const api = {
   profile:      (id)    => req(`/voices/${id}`),
   createP:      (d)     => req('/voices/', { method:'POST', body:JSON.stringify(d) }),
   deleteP:      (id)    => req(`/voices/${id}`, { method:'DELETE' }),
-  consent:      (id)    => req(`/consent/${id}`),
-  addConsent:   (id, d) => req(`/consent/${id}`, { method:'POST', body:JSON.stringify(d) }),
-  revoke:       (id)    => req(`/consent/${id}/revoke`, { method:'DELETE' }),
   upload:       (id, f) => { const fd=new FormData(); fd.append('file',f); return req(`/voices/${id}/samples`,{method:'POST',raw:true,body:fd}); },
   synthesize:   (id, d) => req(`/synthesis/${id}`, { method:'POST', body:JSON.stringify(d) }),
   outputs:      (id)    => req(`/synthesis/${id}/outputs`),
@@ -552,13 +533,13 @@ async function pick(id) {
   try {
     ftStopPolling();
     S.sel = await api.profile(id);
-    S.tab = 'consent'; S.outputs = [];
+    S.tab = 'samples'; S.outputs = [];
     S.ftProgress = 0; S.ftMessage = ''; S.ftError = null;
     renderList();
     document.getElementById('empty').style.display = 'none';
     document.getElementById('pv').style.display = 'flex';
     renderPV();
-    await Promise.all([loadCS(), loadOutputs()]);
+    await loadOutputs();
     renderTab();
     // Reprendre le polling si un job de fine-tuning est actif
     const ftSt = S.sel.fine_tune_status;
@@ -598,14 +579,13 @@ function renderPV() {
   sb.textContent = sbLbl(p.status);
 
   // Steps
-  const hc = p.has_active_consent, hs = p.sample_count > 0, ho = S.outputs.length > 0;
+  const hs = p.sample_count > 0, ho = S.outputs.length > 0;
   const isPresetMode = p.category==='preset' || p.category==='game';
-  setStep('s1','n1', S.tab==='consent', hc, '1');
   // Pour les profils preset : samples optionnels — marqué done meme sans sample
-  setStep('s2','n2', S.tab==='samples', hs || isPresetMode, '2');
-  const sLabel = document.querySelector('#s2 .slabel');
+  setStep('s1','n1', S.tab==='samples', hs || isPresetMode, '1');
+  const sLabel = document.querySelector('#s1 .slabel');
   if (sLabel) sLabel.textContent = `Samples${hs?' ('+p.sample_count+')':isPresetMode?' (optionnel)':''}`;
-  setStep('s3','n3', S.tab==='synthesis', ho, '3');
+  setStep('s2','n2', S.tab==='synthesis', ho, '2');
 }
 
 function setStep(sid, nid, active, done, num) {
@@ -620,99 +600,9 @@ function go(tab) { S.tab = tab; renderPV(); renderTab(); }
 // ================================================================
 function renderTab() {
   const tc = document.getElementById('tc');
-  if (S.tab === 'consent') tc.innerHTML = tConsent();
-  else if (S.tab === 'samples') tc.innerHTML = tSamples();
+  if (S.tab === 'samples') tc.innerHTML = tSamples();
   else tc.innerHTML = tSynth();
   bind();
-}
-
-// ================================================================
-// CONSENT TAB
-// ================================================================
-async function loadCS() {
-  if (!S.sel) return;
-  try { S.cstatus = await api.consent(S.sel.id); } catch { S.cstatus = null; }
-}
-
-const CTXT = `Je certifie être la personne dont la voix est enregistrée dans les fichiers audio fournis, ou avoir obtenu l'autorisation explicite de cette personne pour procéder au clonage vocal. J'accepte que ma voix soit utilisée uniquement dans le cadre de l'application VoiceClonIA, pour un usage personnel, et sans diffusion publique non consentie. Je comprends que je peux révoquer ce consentement à tout moment.`;
-
-function tConsent() {
-  const cs = S.cstatus, p = S.sel;
-  if (p.status === 'revoked') return `
-    <div class="card">
-      <div class="ctitle"><span class="ci">🔒</span> Profil révoqué</div>
-      <div class="revoked-box">Ce profil a été révoqué. La synthèse vocale est désactivée. Supprimez ce profil pour en créer un nouveau.</div>
-    </div>`;
-
-  if (cs?.has_active_consent) {
-    const c = cs.latest_consent;
-    const d = new Date(c.created_at).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
-    return `
-      <div class="card">
-        <div class="ctitle"><span class="ci">✅</span> Consentement actif</div>
-        <div class="consent-ok">
-          <div class="cok-ico">🛡️</div>
-          <div style="flex:1">
-            <div class="cok-by">${x(c.consented_by)}</div>
-            <div class="cok-date">Consenti le ${d}</div>
-          </div>
-          <button class="btn btn-d" onclick="askRevoke()">Révoquer</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="ctitle"><span class="ci">📄</span> Texte du consentement</div>
-        <div class="ctext">${x(CTXT)}</div>
-      </div>
-      <div class="card" style="text-align:center;padding:28px">
-        <div style="font-size:36px;margin-bottom:12px">🚀</div>
-        <div style="font-weight:700;font-size:15px;margin-bottom:8px">Prêt à continuer</div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Uploadez des samples vocaux pour continuer.</div>
-        <button class="btn btn-p" onclick="go('samples')">Aller aux samples →</button>
-      </div>`;
-  }
-
-  return `
-    <div class="card">
-      <div class="ctitle"><span class="ci">📋</span> Enregistrer le consentement</div>
-      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.7">Avant tout clonage vocal, le consentement explicite de la personne est <strong style="color:var(--text)">obligatoire</strong>. Lisez attentivement le texte ci-dessous et validez.</p>
-      <div class="ctext">${x(CTXT)}</div>
-      <div class="fg">
-        <label class="fl">Votre nom ou identifiant *</label>
-        <input class="fi" id="cname" type="text" placeholder="Ex : Jean Dupont" autocomplete="off">
-      </div>
-      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:16px">
-        <input type="checkbox" id="cchk" style="width:15px;height:15px;margin-top:2px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">
-        <label for="cchk" style="font-size:13px;color:var(--text2);cursor:pointer;line-height:1.65">J'ai lu et j'accepte le texte de consentement ci-dessus en connaissance de cause.</label>
-      </div>
-      <button class="btn btn-p" id="cbtn2" onclick="doConsent()">✓ &nbsp;Valider le consentement</button>
-    </div>`;
-}
-
-async function doConsent() {
-  const nm = document.getElementById('cname')?.value.trim();
-  const ok = document.getElementById('cchk')?.checked;
-  if (!nm) { toast('Entrez votre nom', 'err'); return; }
-  if (!ok) { toast('Vous devez cocher la case', 'err'); return; }
-  const btn = document.getElementById('cbtn2');
-  btn.classList.add('spin'); btn.disabled = true;
-  try {
-    await api.addConsent(S.sel.id, { consented_by: nm, accepted: true });
-    toast('Consentement enregistré ✓', 'ok');
-    S.sel = await api.profile(S.sel.id);
-    await loadCS(); renderPV(); renderList(); renderTab();
-  } catch(e) { toast('Erreur : '+e.message,'err'); }
-  finally { btn.classList.remove('spin'); btn.disabled=false; }
-}
-
-function askRevoke() {
-  openConf('⚠️ Révoquer le consentement', 'Cette action désactivera définitivement ce profil. Aucune synthèse ne sera plus possible. Continuer ?', async () => {
-    try {
-      await api.revoke(S.sel.id);
-      toast('Consentement révoqué', 'inf');
-      S.sel = await api.profile(S.sel.id);
-      await loadCS(); renderPV(); renderList(); renderTab();
-    } catch(e) { toast('Erreur : '+e.message,'err'); }
-  });
 }
 
 // ================================================================
@@ -794,7 +684,6 @@ function onFiles(e) { doUpload(Array.from(e.target.files)); }
 
 async function doUpload(files) {
   if (!S.sel) return;
-  if (!S.sel.has_active_consent) { toast('Consentement requis avant l\'upload', 'err'); go('consent'); return; }
   const up = document.getElementById('up'), pf = document.getElementById('pf'), pl = document.getElementById('pl');
   up?.classList.add('show');
   let ok = 0;
@@ -953,9 +842,7 @@ async function ftPollTick() {
 function tSynth() {
   const p = S.sel;
   const isPresetMode = p.category==='preset' || p.category==='game';
-  if (p.status === 'revoked') return `<div class="card" style="text-align:center;padding:36px"><div style="font-size:38px;margin-bottom:14px">🔒</div><div style="font-weight:700;margin-bottom:6px">Profil révoqué</div><div style="font-size:13px;color:var(--text2)">Ce profil n'est plus utilisable.</div></div>`;
-  if (!p.has_active_consent) return `<div class="card" style="text-align:center;padding:36px"><div style="font-size:38px;margin-bottom:14px">📋</div><div style="font-weight:700;margin-bottom:8px">Consentement requis</div><div style="font-size:13px;color:var(--text2);margin-bottom:16px">Enregistrez le consentement avant de synthétiser.</div><button class="btn btn-p" onclick="go('consent')">← Étape 1 : Consentement</button></div>`;
-  if (!p.sample_count && !isPresetMode) return `<div class="card" style="text-align:center;padding:36px"><div style="font-size:38px;margin-bottom:14px">🎤</div><div style="font-weight:700;margin-bottom:8px">Aucun sample vocal</div><div style="font-size:13px;color:var(--text2);margin-bottom:16px">Uploadez au moins un fichier audio de référence.</div><button class="btn btn-p" onclick="go('samples')">← Étape 2 : Samples</button></div>`;
+  if (!p.sample_count && !isPresetMode) return `<div class="card" style="text-align:center;padding:36px"><div style="font-size:38px;margin-bottom:14px">🎤</div><div style="font-weight:700;margin-bottom:8px">Aucun sample vocal</div><div style="font-size:13px;color:var(--text2);margin-bottom:16px">Uploadez au moins un fichier audio de référence.</div><button class="btn btn-p" onclick="go('samples')">← Étape 1 : Samples</button></div>`;
 
   const histHtml = S.outputs.length ? `
     <div class="card">
@@ -1327,14 +1214,11 @@ function toast(msg, type='inf') {
 function x(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtDur(s){ if(!s)return'0s'; if(s<60)return`${Math.round(s)}s`; return`${Math.floor(s/60)}m${Math.round(s%60)}s`; }
 function fmt(s){ if(!s||isNaN(s))return'0:00'; return`${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`; }
-function pEmoji(p){ if(p.status==='revoked')return'🔒'; const cm={game:'🎮',preset:'🤖',clone:'🎤'}; return cm[p.category]||(p.status==='ready'?'🎙️':'⏳'); }
-function sbCls(s){ return{pending_consent:'sb-pending',ready:'sb-ready',revoked:'sb-revoked',error:'sb-error',processing:'sb-processing'}[s]||'sb-pending'; }
-function sbLbl(s){ return{pending_consent:'En attente',ready:'Prêt',revoked:'Révoqué',error:'Erreur',processing:'Traitement'}[s]||s; }
+function pEmoji(p){ const cm={game:'🎮',preset:'🤖',clone:'🎤'}; return cm[p.category]||(p.status==='ready'?'🎙️':'⏳'); }
+function sbCls(s){ return{ready:'sb-ready',error:'sb-error',processing:'sb-processing'}[s]||'sb-ready'; }
+function sbLbl(s){ return{ready:'Prêt',error:'Erreur',processing:'Traitement'}[s]||s; }
 
-function bind() {
-  const ci=document.getElementById('cname');
-  if(ci) ci.onkeydown=e=>{ if(e.key==='Enter') doConsent(); };
-}
+function bind() {}
 
 // Modals close on overlay click
 document.getElementById('cm').onclick = e => { if(e.target===e.currentTarget) closeCreate(); };

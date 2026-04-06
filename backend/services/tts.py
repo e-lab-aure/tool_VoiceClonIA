@@ -404,15 +404,42 @@ class VoxtralEngine(TTSEngine):
         }
 
         if reference_audio is not None:
-            # Encodage base64 du fichier audio — attendu par l'API vLLM Omni
-            audio_b64 = base64.b64encode(reference_audio.read_bytes()).decode("ascii")
-            payload["task_type"] = "Base"
+            # Voxtral génère à 24 kHz — rééchantillonnage de la référence pour correspondre.
+            # On re-encode en WAV PCM_16 24 kHz avant l'encodage base64.
+            import io
+            import soundfile as sf
+            import numpy as np
+
+            _VOXTRAL_SR = 24_000
+            audio_data, src_sr = sf.read(str(reference_audio), dtype="float32", always_2d=False)
+            if src_sr != _VOXTRAL_SR:
+                try:
+                    import librosa
+                    audio_data = librosa.resample(audio_data, orig_sr=src_sr, target_sr=_VOXTRAL_SR)
+                except ImportError:
+                    # Rééchantillonnage linéaire de secours si librosa absent
+                    n_out = int(len(audio_data) * _VOXTRAL_SR / src_sr)
+                    audio_data = np.interp(
+                        np.linspace(0, len(audio_data), n_out, endpoint=False),
+                        np.arange(len(audio_data)),
+                        audio_data,
+                    ).astype(np.float32)
+                logger.info(
+                    "Voxtral — référence rééchantillonnée %d Hz → %d Hz",
+                    src_sr, _VOXTRAL_SR,
+                )
+
+            wav_buf = io.BytesIO()
+            sf.write(wav_buf, audio_data, _VOXTRAL_SR, format="WAV", subtype="PCM_16")
+            wav_buf.seek(0)
+            audio_b64 = base64.b64encode(wav_buf.read()).decode("ascii")
             payload["ref_audio"] = f"data:audio/wav;base64,{audio_b64}"
             if ref_text:
                 payload["ref_text"] = ref_text
             logger.info(
-                "Voxtral clonage vocal — ref_audio=%s ref_text=%s",
+                "Voxtral clonage vocal — ref_audio=%s (%d Ko) ref_text=%s",
                 reference_audio.name,
+                len(audio_b64) // 1024,
                 bool(ref_text),
             )
         else:

@@ -657,7 +657,9 @@ def synthesize_speech(
             f"Texte trop long ({len(text)} caractères). Maximum : 5000 caractères."
         )
 
-    if not reference_audios:
+    # Voxtral sans samples : synthese en mode preset (voix integree)
+    resolved_engine = (engine_name or TTS_ENGINE).lower()
+    if not reference_audios and resolved_engine != "voxtral":
         raise ValueError("Au moins un fichier de référence est requis.")
 
     missing = [p for p in reference_audios if not p.exists()]
@@ -683,10 +685,11 @@ def synthesize_speech(
 
     # Voxtral accède aux samples via URL localhost — pas de fichier temporaire
     # (vLLM doit pouvoir fetcher ref_audio, un temp file n'est pas accessible via l'API)
+    # Si aucun sample : mode preset (reference_audio=None → voix integree)
     if isinstance(engine, VoxtralEngine):
         return engine.synthesize(
             text=text,
-            reference_audio=reference_audios[0],
+            reference_audio=reference_audios[0] if reference_audios else None,
             output_path=output_path,
             voice=voice,
             ref_text=ref_text,

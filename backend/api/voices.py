@@ -39,7 +39,10 @@ class VoiceProfileCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255, description="Nom unique du profil")
     description: str | None = Field(None, max_length=1000, description="Description libre")
-    engine: str = Field("chatterbox", description="Moteur TTS : chatterbox | f5tts")
+    engine: str = Field("chatterbox", description="Moteur TTS : chatterbox | f5tts | voxtral")
+    category: str | None = Field(None, description="Categorie : clone | preset | game")
+    preset_voice: str | None = Field(None, max_length=64, description="Voix preset Voxtral par defaut")
+    tags: str | None = Field(None, max_length=255, description="Tags libres")
 
 
 class VoiceProfileResponse(BaseModel):
@@ -55,6 +58,9 @@ class VoiceProfileResponse(BaseModel):
     has_active_consent: bool
     # Statut du fine-tuning XTTS-v2 : None | pending | running | done | error | cancelled
     fine_tune_status: str | None
+    category: str | None
+    preset_voice: str | None
+    tags: str | None
 
     model_config = {"from_attributes": True}
 
@@ -105,11 +111,22 @@ def create_voice_profile(
             detail=f"Moteur inconnu '{payload.engine}'. Valeurs acceptées : {allowed_engines}",
         )
 
+    # Valide la categorie si fournie
+    allowed_categories = {None, "clone", "preset", "game"}
+    if payload.category not in allowed_categories:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Categorie inconnue '{payload.category}'. Valeurs acceptees : clone, preset, game",
+        )
+
     profile = VoiceProfile(
         name=payload.name,
         description=payload.description,
         engine=payload.engine,
         status=ProfileStatus.PENDING_CONSENT,
+        category=payload.category,
+        preset_voice=payload.preset_voice,
+        tags=payload.tags,
     )
     db.add(profile)
     db.commit()

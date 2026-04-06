@@ -115,16 +115,22 @@ def synthesize(
     # Récupération de tous les samples de référence du profil
     samples = get_profile_samples(profile_id)
     if not samples:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Aucun sample audio de référence trouvé pour ce profil.",
-        )
+        # Voxtral sans sample : autorisé si une voix preset est disponible
+        is_voxtral = profile.engine == "voxtral"
+        if not is_voxtral:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Aucun sample audio de référence trouvé pour ce profil.",
+            )
 
     logger.info(
         "Synthèse — profil=%d — %d sample(s) de référence utilisé(s)",
         profile_id,
         len(samples),
     )
+
+    # Voix effective : payload > preset_voice du profil > défaut Voxtral
+    effective_voice = payload.voice or getattr(profile, "preset_voice", None)
 
     # Lancement de la synthèse avec tous les samples (concaténation interne).
     # Si un modèle fine-tuné est disponible, il est automatiquement utilisé.
@@ -137,7 +143,7 @@ def synthesize(
             cfg_weight=payload.cfg_weight,
             engine_name=profile.engine,
             fine_tuned_model_path=profile.fine_tuned_model_path,
-            voice=payload.voice,
+            voice=effective_voice,
             ref_text=payload.ref_text,
         )
     except ValueError as exc:

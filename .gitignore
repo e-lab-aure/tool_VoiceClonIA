@@ -13,11 +13,11 @@ build/
 # Variables d'environnement — NE JAMAIS COMMITTER
 .env
 
-# Données locales (samples audio, sorties générées, base de données, modèles fine-tunés)
+# Donnees locales (samples audio, sorties generees, base de donnees, modeles fine-tunes)
 uploads/
 outputs/
 data/
-models/
+/models/
 
 # IDE
 .vscode/
@@ -32,3 +32,7 @@ Thumbs.db
 # Local dev context
 CLAUDE.md
 .claude/
+
+# Artefacts Windows et fichiers de test locaux
+NUL
+test_voxtral.wav

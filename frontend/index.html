@@ -262,6 +262,24 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
 .tico{font-size:15px}.tmsg{flex:1}
 @keyframes tin{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
 @keyframes tout{from{transform:translateX(0);opacity:1}to{transform:translateX(110%);opacity:0}}
+
+/* ── MODE CARDS (creation modal) ── */
+.mode-cards{display:flex;gap:8px;margin-bottom:16px}
+.mode-card{flex:1;padding:11px 8px;border:2px solid var(--border);border-radius:var(--r);cursor:pointer;text-align:center;transition:all .18s;background:var(--s2);user-select:none}
+.mode-card:hover{border-color:var(--border2);background:var(--s3)}
+.mode-card.sel{border-color:var(--accent);background:var(--accent-bg)}
+.mc-ico{font-size:20px;margin-bottom:5px}
+.mc-lbl{font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px}
+.mc-sub{font-size:10px;color:var(--text3);line-height:1.4}
+.mode-card.sel .mc-lbl{color:var(--accent2)}
+/* Category badges */
+.cat-badge{font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:.4px}
+.cat-clone{background:rgba(139,92,246,.12);color:var(--accent2);border:1px solid rgba(139,92,246,.25)}
+.cat-preset{background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.2)}
+.cat-game{background:rgba(245,158,11,.1);color:var(--yellow);border:1px solid rgba(245,158,11,.2)}
+/* Export card */
+.export-card{background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.18);border-radius:var(--r);padding:14px;margin-bottom:14px}
+.export-code{font-family:monospace;font-size:11px;background:var(--s3);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text2);line-height:1.7;white-space:pre;overflow-x:auto;margin:8px 0}
 </style>
 </head>
 <body>
@@ -330,7 +348,7 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
           <div class="sep"></div>
           <div class="step" id="s2" onclick="go('samples')">
             <div class="snum" id="n2">2</div>
-            <span class="slabel">Samples <span id="sc"></span></span>
+            <span class="slabel">Samples</span>
           </div>
           <div class="sep"></div>
           <div class="step" id="s3" onclick="go('synthesis')">
@@ -349,11 +367,34 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
 
 <!-- CREATE MODAL -->
 <div class="mover" id="cm">
-  <div class="modal">
+  <div class="modal" style="width:460px">
     <div class="mtitle">🎙️ Nouveau profil vocal</div>
-    <div class="fg"><label class="fl">Nom *</label><input class="fi" id="cn" type="text" placeholder="Ex : Ma voix, Bot assistant…" autocomplete="off"></div>
+
+    <!-- Mode picker -->
+    <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Type de profil</div>
+    <div class="mode-cards">
+      <div class="mode-card sel" id="mc-clone" onclick="setMode('clone')">
+        <div class="mc-ico">🎤</div>
+        <div class="mc-lbl">Clonage vocal</div>
+        <div class="mc-sub">Clone depuis un extrait audio</div>
+      </div>
+      <div class="mode-card" id="mc-preset" onclick="setMode('preset')">
+        <div class="mc-ico">🤖</div>
+        <div class="mc-lbl">TTS direct</div>
+        <div class="mc-sub">Voix preset, sans sample</div>
+      </div>
+      <div class="mode-card" id="mc-game" onclick="setMode('game')">
+        <div class="mc-ico">🎮</div>
+        <div class="mc-lbl">Personnage jeu</div>
+        <div class="mc-sub">Preset pour vos jeux</div>
+      </div>
+    </div>
+
+    <div class="fg"><label class="fl">Nom *</label><input class="fi" id="cn" type="text" placeholder="Ex : Ma voix, Garde_01, Bot assistant…" autocomplete="off"></div>
     <div class="fg"><label class="fl">Description</label><input class="fi" id="cd" type="text" placeholder="Description optionnelle"></div>
-    <div class="fg">
+
+    <!-- Champ moteur — visible seulement pour clone -->
+    <div class="fg" id="cg-engine">
       <label class="fl">Moteur TTS</label>
       <select class="fsel" id="ce">
         <option value="chatterbox">⚡ Chatterbox — Rapide, temps réel (recommandé)</option>
@@ -361,6 +402,23 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
         <option value="voxtral">🌟 Voxtral-4B — Mistral AI, multilingue, 24 kHz</option>
       </select>
     </div>
+
+    <!-- Voix preset — visible pour preset + game -->
+    <div class="fg" id="cg-voice" style="display:none">
+      <label class="fl">Voix par défaut</label>
+      <select class="fsel" id="cpv">
+        <optgroup label="Français"><option value="fr_male">fr_male — Homme FR</option><option value="fr_female">fr_female — Femme FR</option></optgroup>
+        <optgroup label="Anglais"><option value="neutral_male">neutral_male</option><option value="neutral_female">neutral_female</option><option value="casual_male">casual_male</option><option value="casual_female">casual_female</option><option value="cheerful_female">cheerful_female</option></optgroup>
+        <optgroup label="Autres langues"><option value="es_male">es_male</option><option value="es_female">es_female</option><option value="de_male">de_male</option><option value="de_female">de_female</option><option value="it_male">it_male</option><option value="it_female">it_female</option><option value="pt_male">pt_male</option><option value="pt_female">pt_female</option></optgroup>
+      </select>
+    </div>
+
+    <!-- Tags — visible pour game -->
+    <div class="fg" id="cg-tags" style="display:none">
+      <label class="fl">Tags du personnage <span style="color:var(--text3)">(optionnel)</span></label>
+      <input class="fi" id="ctags" type="text" placeholder="Ex : Garde, Boss, PNJ ennemi…" autocomplete="off">
+    </div>
+
     <div class="mfoot">
       <button class="btn btn-s" onclick="closeCreate()">Annuler</button>
       <button class="btn btn-p" id="cbtn" onclick="doCreate()">Créer</button>
@@ -473,15 +531,21 @@ function renderList() {
     el.innerHTML = '<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px;line-height:1.7">Aucun profil.<br>Créez-en un pour commencer.</div>';
     return;
   }
-  el.innerHTML = S.profiles.map(p => `
+  el.innerHTML = S.profiles.map(p => {
+    const catInfo = {clone:'🎤 Clone',preset:'🤖 Preset',game:'🎮 Jeu'};
+    const sub = p.category && catInfo[p.category]
+      ? catInfo[p.category] + (p.tags ? ` · ${p.tags.split(',')[0].trim()}` : '')
+      : `${p.sample_count} sample${p.sample_count!==1?'s':''} · ${fmtDur(p.total_duration_s)}`;
+    return `
     <div class="p-item ${S.sel?.id===p.id?'active':''}" onclick="pick(${p.id})">
       <div class="p-av">${pEmoji(p)}</div>
       <div class="p-meta">
         <div class="p-name">${x(p.name)}</div>
-        <div class="p-sub">${p.sample_count} sample${p.sample_count!==1?'s':''} · ${fmtDur(p.total_duration_s)}</div>
+        <div class="p-sub">${sub}</div>
       </div>
       <span class="sbadge ${sbCls(p.status)}">${sbLbl(p.status)}</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 async function pick(id) {
@@ -518,16 +582,29 @@ function renderPV() {
   const p = S.sel;
   document.getElementById('pv-name').textContent = p.name;
   const engineLabels = { chatterbox: '⚡ Chatterbox', f5tts: '✨ F5-TTS', voxtral: '🌟 Voxtral-4B', xttsv2: '🧬 XTTS-v2' };
-  document.getElementById('pv-engine').textContent = engineLabels[p.engine] || p.engine;
+  const catLabels = { clone:'🎤 Clone', preset:'🤖 TTS direct', game:'🎮 Jeu' };
+  const engineEl = document.getElementById('pv-engine');
+  engineEl.textContent = engineLabels[p.engine] || p.engine;
+  // Badge categorie
+  let catEl = document.getElementById('pv-cat');
+  if (!catEl) { catEl=document.createElement('span'); catEl.id='pv-cat'; engineEl.parentNode.insertBefore(catEl,engineEl.nextSibling); }
+  if (p.category) {
+    catEl.className = 'cat-badge cat-'+p.category;
+    catEl.textContent = catLabels[p.category]||p.category;
+    catEl.style.display='';
+  } else { catEl.style.display='none'; }
   const sb = document.getElementById('pv-status');
   sb.className = 'sbadge ' + sbCls(p.status);
   sb.textContent = sbLbl(p.status);
 
   // Steps
   const hc = p.has_active_consent, hs = p.sample_count > 0, ho = S.outputs.length > 0;
+  const isPresetMode = p.category==='preset' || p.category==='game';
   setStep('s1','n1', S.tab==='consent', hc, '1');
-  setStep('s2','n2', S.tab==='samples', hs, '2');
-  document.getElementById('sc').textContent = hs ? `(${p.sample_count})` : '';
+  // Pour les profils preset : samples optionnels — marqué done meme sans sample
+  setStep('s2','n2', S.tab==='samples', hs || isPresetMode, '2');
+  const sLabel = document.querySelector('#s2 .slabel');
+  if (sLabel) sLabel.textContent = `Samples${hs?' ('+p.sample_count+')':isPresetMode?' (optionnel)':''}`;
   setStep('s3','n3', S.tab==='synthesis', ho, '3');
 }
 
@@ -643,9 +720,10 @@ function askRevoke() {
 // ================================================================
 function tSamples() {
   const p = S.sel;
-  const dc = p.total_duration_s >= 10 ? 'var(--green)' : p.total_duration_s >= 3 ? 'var(--yellow)' : 'var(--red)';
-  const qi = p.total_duration_s >= 10 ? '✅' : p.total_duration_s >= 3 ? '⚠️' : '❌';
-  const ql = p.total_duration_s >= 10 ? 'Optimal' : p.total_duration_s >= 3 ? 'Correct' : 'Insuffisant';
+  const isPreset = p.category==='preset' || p.category==='game';
+  const dc = p.total_duration_s >= 10 ? 'var(--green)' : p.total_duration_s >= 3 ? 'var(--yellow)' : (isPreset?'var(--text3)':'var(--red)');
+  const qi = p.total_duration_s >= 10 ? '✅' : p.total_duration_s >= 3 ? '⚠️' : (isPreset?'⬜':'❌');
+  const ql = p.total_duration_s >= 10 ? 'Optimal' : p.total_duration_s >= 3 ? 'Correct' : (isPreset?'Optionnel':'Insuffisant');
   const items = p.sample_count > 0
     ? Array.from({length:p.sample_count},(_,i)=>`
         <div class="sitem">
@@ -664,13 +742,22 @@ function tSamples() {
       <div class="scard"><div class="sval" style="color:${dc}">${fmtDur(p.total_duration_s)}</div><div class="slbl">Durée totale</div></div>
       <div class="scard"><div class="sval" style="font-size:18px">${qi}</div><div class="slbl">${ql}</div></div>
     </div>
+    ${isPreset && !p.sample_count ? `
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);margin-bottom:14px">
+      <span style="font-size:18px">✅</span>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--green)">Samples optionnels pour ce profil</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">La voix preset <strong>${p.preset_voice||'défaut Voxtral'}</strong> sera utilisée automatiquement. Ajoutez un sample pour activer le clonage vocal.</div>
+      </div>
+      <button class="btn btn-p" style="flex-shrink:0;font-size:12px" onclick="go('synthesis')">Synthétiser →</button>
+    </div>` : ''}
     <div class="tips">
-      <div class="ttitle">💡 Conseils pour un clonage optimal${p.engine === 'voxtral' ? ' · Voxtral-4B' : ''}</div>
+      <div class="ttitle">💡 Conseils${p.engine === 'voxtral' ? ' · Voxtral-4B' : ''}</div>
       <ul class="tlist">
         ${p.engine === 'voxtral' ? `
-        <li>2 à 30 secondes de référence suffisent pour Voxtral</li>
-        <li>Notez la transcription exacte de votre sample — à renseigner dans l'onglet Synthèse</li>
-        <li>Enregistrement calme et clair, sans bruit de fond</li>
+        <li>2 à 30 secondes de référence suffisent pour un clonage de qualité</li>
+        <li>Notez la transcription exacte — à renseigner dans l'onglet Synthèse pour améliorer la fidélité</li>
+        <li>Sans sample : la voix preset sélectionnée sera utilisée directement</li>
         <li>Formats : WAV, MP3, FLAC, OGG, M4A (max 50 Mo par fichier)</li>
         ` : `
         <li>10 à 30 secondes minimum pour de bons résultats</li>
@@ -865,9 +952,10 @@ async function ftPollTick() {
 // ================================================================
 function tSynth() {
   const p = S.sel;
+  const isPresetMode = p.category==='preset' || p.category==='game';
   if (p.status === 'revoked') return `<div class="card" style="text-align:center;padding:36px"><div style="font-size:38px;margin-bottom:14px">🔒</div><div style="font-weight:700;margin-bottom:6px">Profil révoqué</div><div style="font-size:13px;color:var(--text2)">Ce profil n'est plus utilisable.</div></div>`;
   if (!p.has_active_consent) return `<div class="card" style="text-align:center;padding:36px"><div style="font-size:38px;margin-bottom:14px">📋</div><div style="font-weight:700;margin-bottom:8px">Consentement requis</div><div style="font-size:13px;color:var(--text2);margin-bottom:16px">Enregistrez le consentement avant de synthétiser.</div><button class="btn btn-p" onclick="go('consent')">← Étape 1 : Consentement</button></div>`;
-  if (!p.sample_count) return `<div class="card" style="text-align:center;padding:36px"><div style="font-size:38px;margin-bottom:14px">🎤</div><div style="font-weight:700;margin-bottom:8px">Aucun sample vocal</div><div style="font-size:13px;color:var(--text2);margin-bottom:16px">Uploadez au moins un fichier audio de référence.</div><button class="btn btn-p" onclick="go('samples')">← Étape 2 : Samples</button></div>`;
+  if (!p.sample_count && !isPresetMode) return `<div class="card" style="text-align:center;padding:36px"><div style="font-size:38px;margin-bottom:14px">🎤</div><div style="font-weight:700;margin-bottom:8px">Aucun sample vocal</div><div style="font-size:13px;color:var(--text2);margin-bottom:16px">Uploadez au moins un fichier audio de référence.</div><button class="btn btn-p" onclick="go('samples')">← Étape 2 : Samples</button></div>`;
 
   const histHtml = S.outputs.length ? `
     <div class="card">
@@ -938,10 +1026,15 @@ function tSynth() {
         <textarea class="fi" id="voxtral-reftext" rows="2" placeholder="Texte exact prononcé dans votre sample audio uploadé…" style="min-height:60px"></textarea>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">Fournir la transcription améliore significativement la fidélité du clonage vocal.</div>
       </div>
+      ${!p.sample_count && p.preset_voice ? `
+      <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--green-bg);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);margin-bottom:10px">
+        <span style="font-size:13px">🤖</span>
+        <span style="font-size:12px;color:var(--green);font-weight:500">Mode TTS direct · Voix preset : <strong>${p.preset_voice}</strong> · 24 kHz</span>
+      </div>` : `
       <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--accent-bg);border:1px solid rgba(139,92,246,.25);border-radius:var(--r);margin-bottom:10px">
         <span style="font-size:13px">🌟</span>
         <span style="font-size:12px;color:var(--accent2);font-weight:500">${p.sample_count} sample${p.sample_count > 1 ? 's' : ''} · Voxtral-4B — zero-shot cloning · 24 kHz</span>
-      </div>
+      </div>`}
       <div style="display:flex;align-items:flex-start;gap:8px;padding:9px 12px;background:var(--yellow-bg);border:1px solid rgba(245,158,11,.2);border-radius:var(--r)">
         <span style="font-size:13px;flex-shrink:0">⚠️</span>
         <span style="font-size:11px;color:var(--yellow);line-height:1.6">Serveur vLLM requis sur le port 8001 :<br><code style="color:var(--text2);font-size:10px">vllm serve mistralai/Voxtral-4B-TTS-2603 --omni --port 8001</code></span>
@@ -981,7 +1074,39 @@ function tSynth() {
       🎙️ &nbsp;Générer la synthèse vocale
     </button>
 
-    ${histHtml}`;
+    ${histHtml}
+    ${p.category === 'game' ? gameExportCard(p) : ''}
+    `;
+}
+
+function gameExportCard(p) {
+  const voice = p.preset_voice || 'fr_male';
+  const payload = JSON.stringify({text:'Votre texte ici', voice: p.sample_count ? undefined : voice}, null, 2)
+    .replace(/"voice": undefined,?\n?/,'');
+  const curlEx = `curl -s -X POST http://127.0.0.1:8000/synthesis/${p.id} \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({text:'Votre texte ici'})}'`;
+  return `
+  <div class="export-card">
+    <div style="font-size:11px;font-weight:700;color:var(--yellow);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">🎮 Export — Integration jeu</div>
+    <div style="display:flex;gap:14px;margin-bottom:10px">
+      <div style="flex:1">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">ID profil</div>
+        <div style="font-size:20px;font-weight:800;color:var(--text)">${p.id}</div>
+      </div>
+      <div style="flex:2">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Moteur</div>
+        <div style="font-size:12px;font-weight:600">🌟 Voxtral-4B${p.preset_voice?' · '+p.preset_voice:''}</div>
+      </div>
+      ${p.tags?`<div style="flex:2"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">Tags</div><div style="font-size:12px;color:var(--yellow)">${x(p.tags)}</div></div>`:''}
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Exemple d'appel API :</div>
+    <div class="export-code">${x(curlEx)}</div>
+    <button class="btn btn-s" style="font-size:11px;padding:5px 12px" onclick="copyExport(${p.id})">📋 Copier l'appel API</button>
+  </div>`;
+}
+
+function copyExport(pid) {
+  const txt = `curl -s -X POST http://127.0.0.1:8000/synthesis/${pid} -H "Content-Type: application/json" -d '{"text":"Votre texte ici"}'`;
+  navigator.clipboard.writeText(txt).then(()=>toast('Commande copiée','ok')).catch(()=>toast('Copie impossible','err'));
 }
 
 function setTxt(t) {
@@ -1011,7 +1136,9 @@ async function doSynth() {
     </div>`;
   const payload = { text, exaggeration: exag, cfg_weight: cfg };
   if (isVoxtral) {
-    const voice = document.getElementById('voxtral-voice')?.value || '';
+    const voiceSel = document.getElementById('voxtral-voice')?.value || '';
+    // Fallback sur preset_voice du profil si rien de selectionne manuellement
+    const voice = voiceSel || S.sel.preset_voice || '';
     const refText = document.getElementById('voxtral-reftext')?.value.trim() || '';
     if (voice) payload.voice = voice;
     if (refText) payload.ref_text = refText;
@@ -1114,8 +1241,24 @@ function seekAudio(pid, e) {
 // ================================================================
 // CREATE PROFILE
 // ================================================================
+let _createMode = 'clone';
+
+function setMode(m) {
+  _createMode = m;
+  ['clone','preset','game'].forEach(k => {
+    document.getElementById('mc-'+k).classList.toggle('sel', k===m);
+  });
+  document.getElementById('cg-engine').style.display = m==='clone' ? '' : 'none';
+  document.getElementById('cg-voice').style.display  = (m==='preset'||m==='game') ? '' : 'none';
+  document.getElementById('cg-tags').style.display   = m==='game' ? '' : 'none';
+}
+
 function openCreate() {
-  document.getElementById('cn').value=''; document.getElementById('cd').value='';
+  _createMode = 'clone';
+  document.getElementById('cn').value='';
+  document.getElementById('cd').value='';
+  document.getElementById('ctags').value='';
+  setMode('clone');
   document.getElementById('cm').classList.add('open');
   setTimeout(()=>document.getElementById('cn').focus(),120);
 }
@@ -1124,12 +1267,21 @@ function closeCreate() { document.getElementById('cm').classList.remove('open');
 async function doCreate() {
   const nm = document.getElementById('cn').value.trim();
   const dc = document.getElementById('cd').value.trim();
-  const en = document.getElementById('ce').value;
+  const tags = document.getElementById('ctags').value.trim();
+  // moteur : voxtral force pour preset/game
+  const en = (_createMode==='clone') ? document.getElementById('ce').value : 'voxtral';
+  const pv = (_createMode==='preset'||_createMode==='game')
+    ? document.getElementById('cpv').value : null;
   if (!nm) { toast('Le nom est requis','err'); return; }
   const btn=document.getElementById('cbtn');
   btn.classList.add('spin'); btn.disabled=true;
   try {
-    const p = await api.createP({name:nm, description:dc||null, engine:en});
+    const p = await api.createP({
+      name:nm, description:dc||null, engine:en,
+      category:_createMode,
+      preset_voice: pv||null,
+      tags: tags||null,
+    });
     closeCreate(); await loadProfiles(); pick(p.id);
     toast(`Profil "${nm}" créé`, 'ok');
   } catch(e) { toast('Erreur : '+e.message,'err'); }
@@ -1175,7 +1327,7 @@ function toast(msg, type='inf') {
 function x(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtDur(s){ if(!s)return'0s'; if(s<60)return`${Math.round(s)}s`; return`${Math.floor(s/60)}m${Math.round(s%60)}s`; }
 function fmt(s){ if(!s||isNaN(s))return'0:00'; return`${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`; }
-function pEmoji(p){ if(p.status==='revoked')return'🔒'; if(p.status==='ready')return'🎙️'; return'⏳'; }
+function pEmoji(p){ if(p.status==='revoked')return'🔒'; const cm={game:'🎮',preset:'🤖',clone:'🎤'}; return cm[p.category]||(p.status==='ready'?'🎙️':'⏳'); }
 function sbCls(s){ return{pending_consent:'sb-pending',ready:'sb-ready',revoked:'sb-revoked',error:'sb-error',processing:'sb-processing'}[s]||'sb-pending'; }
 function sbLbl(s){ return{pending_consent:'En attente',ready:'Prêt',revoked:'Révoqué',error:'Erreur',processing:'Traitement'}[s]||s; }
 

@@ -66,6 +66,9 @@ def _migrate_add_columns() -> None:
     new_columns = [
         ("fine_tune_status", "VARCHAR(32)"),
         ("fine_tuned_model_path", "VARCHAR(512)"),
+        ("category", "VARCHAR(32)"),
+        ("preset_voice", "VARCHAR(64)"),
+        ("tags", "VARCHAR(255)"),
     ]
 
     with engine.connect() as conn:

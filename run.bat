@@ -129,7 +129,7 @@ if not exist "%~dp0venv\Scripts\activate.bat" (
 :: Les logs sont affiches en console ET ecrits dans backend.log (pour monitor.bat)
 echo.
 echo [4/4] Demarrage du serveur web VoiceClonIA...
-start "VoiceClonIA — Serveur web" cmd /k "cd /d %~dp0 && call venv\Scripts\activate.bat && uvicorn backend.main:app --host 127.0.0.1 --port 8000 2>&1 | powershell -noprofile -command \"$input | Tee-Object -FilePath '%~dp0backend.log'\""
+start "VoiceClonIA — Serveur web" cmd /k "cd /d %~dp0 && call venv\Scripts\activate.bat && uvicorn backend.main:app --host 127.0.0.1 --port 8000 2>&1 | python _tee.py backend.log"
 echo [OK] Fenetre serveur web ouverte
 
 :: --- Resume ---

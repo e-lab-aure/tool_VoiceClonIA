@@ -219,12 +219,13 @@ def _open_voxtral_logs() -> None:
 def _start_backend_window() -> None:
     """Lance uvicorn dans une fenetre dediee en ecrivant aussi dans backend.log."""
     root = str(PROJECT_ROOT)
+    tee  = str(PROJECT_ROOT / "_tee.py")
     log  = str(BACKEND_LOG)
     inner = (
         f"cd /d {root} && "
         f"call venv\\Scripts\\activate.bat && "
         f"uvicorn backend.main:app --host {BACKEND_HOST} --port {BACKEND_PORT} 2>&1 | "
-        f"powershell -noprofile -command \"$input | Tee-Object -FilePath '{log}'\""
+        f"python \"{tee}\" \"{log}\""
     )
     _open_window("VoiceClonIA — Serveur web", inner)
 

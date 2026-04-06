@@ -429,26 +429,39 @@ class VoxtralEngine(TTSEngine):
                     src_sr, _VOXTRAL_SR,
                 )
 
-            # Suppression du silence en debut/fin (evite l'echec de conditioning)
+            dur_before = len(audio_data) / _VOXTRAL_SR
+
+            # Suppression du silence en debut/fin — top_db=60 pour rester permissif
             try:
                 import librosa
-                audio_data, _ = librosa.effects.trim(audio_data, top_db=30)
+                audio_trimmed, _ = librosa.effects.trim(audio_data, top_db=60)
+                # Ne garder le trim que si au moins 1 s subsiste
+                if len(audio_trimmed) >= _VOXTRAL_SR:
+                    audio_data = audio_trimmed
             except Exception:
                 pass
+
+            dur_after = len(audio_data) / _VOXTRAL_SR
+            logger.info(
+                "Voxtral — audio ref : %.2fs avant trim -> %.2fs apres trim",
+                dur_before, dur_after,
+            )
 
             wav_buf = io.BytesIO()
             sf.write(wav_buf, audio_data, _VOXTRAL_SR, format="WAV", subtype="PCM_16")
             wav_buf.seek(0)
             audio_b64 = base64.b64encode(wav_buf.read()).decode("ascii")
+
+            # task_type requis par vLLM pour activer le conditioning vocal
+            payload["task_type"] = "Base"
             payload["ref_audio"] = f"data:audio/wav;base64,{audio_b64}"
             if ref_text:
                 payload["ref_text"] = ref_text
             logger.info(
-                "Voxtral clonage vocal — ref_audio=%s (%d Ko, %.1fs a %d Hz) ref_text=%s",
+                "Voxtral clonage vocal — ref_audio=%s (%d Ko, %.1fs) ref_text=%s",
                 reference_audio.name,
                 len(audio_b64) // 1024,
-                len(audio_data) / _VOXTRAL_SR,
-                _VOXTRAL_SR,
+                dur_after,
                 bool(ref_text),
             )
         else:

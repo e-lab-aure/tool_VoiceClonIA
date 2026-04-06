@@ -52,7 +52,12 @@ def setup_logger(name: str = "voicelconia") -> logging.Logger:
         print(f"[WARNING] Impossible d'initialiser le handler de log fichier : {exc}", file=sys.stderr)
 
     # Handler console (stdout) pour le développement
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Force UTF-8 sur Windows (évite UnicodeEncodeError avec cp1252)
+    import io
+    utf8_stream = io.TextIOWrapper(
+        sys.stdout.buffer, encoding="utf-8", line_buffering=True
+    )
+    console_handler = logging.StreamHandler(utf8_stream)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 

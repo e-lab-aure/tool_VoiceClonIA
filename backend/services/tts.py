@@ -8,6 +8,7 @@ Fournit une interface unifiée pour les différents moteurs supportés :
 Le moteur actif est sélectionné via la variable d'environnement TTS_ENGINE.
 """
 
+import base64
 import tempfile
 import uuid
 from abc import ABC, abstractmethod
@@ -17,7 +18,7 @@ import httpx
 import numpy as np
 import soundfile as sf
 
-from backend.core.config import HOST, OUTPUT_DIR, PORT, TTS_ENGINE, UPLOAD_DIR, VOXTRAL_DEFAULT_VOICE, VOXTRAL_SERVER_URL
+from backend.core.config import OUTPUT_DIR, TTS_ENGINE, UPLOAD_DIR, VOXTRAL_DEFAULT_VOICE, VOXTRAL_SERVER_URL
 from backend.core.logger import logger
 
 # Durée maximale de la référence concaténée (en secondes)
@@ -359,19 +360,6 @@ class XTTSv2Engine(TTSEngine):
             return False
 
 
-def _build_upload_url(reference_audio: Path) -> str:
-    """
-    Convertit un chemin de sample local en URL localhost accessible par vLLM.
-
-    Le chemin doit respecter la structure : UPLOAD_DIR/profile_{id}/{filename}.wav
-    L'URL générée pointe vers l'endpoint GET /voices/{id}/samples/{filename}
-    servi par FastAPI sur le même hôte.
-    """
-    dir_name = reference_audio.parent.name   # ex: "profile_1"
-    profile_id = dir_name.removeprefix("profile_")
-    return f"http://{HOST}:{PORT}/voices/{profile_id}/samples/{reference_audio.name}"
-
-
 class VoxtralEngine(TTSEngine):
     """
     Moteur TTS Voxtral-4B (Mistral AI) via vLLM Omni.
@@ -415,19 +403,16 @@ class VoxtralEngine(TTSEngine):
             "response_format": "wav",
         }
 
-        # Détection du mode : clonage vocal si le fichier est dans UPLOAD_DIR
-        # (sinon c'est un fichier temporaire non accessible via URL)
-        is_in_uploads = reference_audio is not None and str(reference_audio).startswith(str(UPLOAD_DIR))
-
-        if is_in_uploads:
-            ref_url = _build_upload_url(reference_audio)
+        if reference_audio is not None:
+            # Encodage base64 du fichier audio — attendu par l'API vLLM Omni
+            audio_b64 = base64.b64encode(reference_audio.read_bytes()).decode("ascii")
             payload["task_type"] = "Base"
-            payload["ref_audio"] = ref_url
+            payload["ref_audio"] = audio_b64
             if ref_text:
                 payload["ref_text"] = ref_text
             logger.info(
                 "Voxtral clonage vocal — ref_audio=%s ref_text=%s",
-                ref_url,
+                reference_audio.name,
                 bool(ref_text),
             )
         else:

@@ -8,7 +8,6 @@ Fournit une interface unifiée pour les différents moteurs supportés :
 Le moteur actif est sélectionné via la variable d'environnement TTS_ENGINE.
 """
 
-import base64
 import tempfile
 import uuid
 from abc import ABC, abstractmethod
@@ -18,7 +17,7 @@ import httpx
 import numpy as np
 import soundfile as sf
 
-from backend.core.config import OUTPUT_DIR, TTS_ENGINE, UPLOAD_DIR, VOXTRAL_DEFAULT_VOICE, VOXTRAL_SERVER_URL
+from backend.core.config import OUTPUT_DIR, PORT, TTS_ENGINE, UPLOAD_DIR, VOXTRAL_DEFAULT_VOICE, VOXTRAL_SERVER_URL
 from backend.core.logger import logger
 
 # Durée maximale de la référence concaténée (en secondes)
@@ -360,6 +359,18 @@ class XTTSv2Engine(TTSEngine):
             return False
 
 
+def _build_sample_url(reference_audio: Path) -> str:
+    """
+    Construit l'URL localhost du sample audio accessible par le serveur vLLM.
+
+    Le container vLLM tourne avec --network=host, donc il peut fetcher
+    http://127.0.0.1:8000. Le chemin attendu : UPLOAD_DIR/profile_{id}/{file}.wav
+    """
+    profile_dir = reference_audio.parent.name   # ex : "profile_1"
+    profile_id  = profile_dir.removeprefix("profile_")
+    return f"http://127.0.0.1:{PORT}/voices/{profile_id}/samples/{reference_audio.name}"
+
+
 class VoxtralEngine(TTSEngine):
     """
     Moteur TTS Voxtral-4B (Mistral AI) via vLLM Omni.
@@ -404,19 +415,16 @@ class VoxtralEngine(TTSEngine):
         }
 
         if reference_audio is not None:
-            # Encodage du WAV tel quel (16 kHz PCM_16 mono — format natif du pipeline).
-            # Le processeur audio de Voxtral attend du 16 kHz ; resampler à 24 kHz
-            # provoque un echec dans apply_partial cote vLLM.
-            audio_b64 = base64.b64encode(reference_audio.read_bytes()).decode("ascii")
-
+            # vLLM Omni attend une URL HTTP accessible (pas base64).
+            # Le container tourne avec --network=host donc il peut fetcher localhost.
+            ref_url = _build_sample_url(reference_audio)
             payload["task_type"] = "Base"
-            payload["ref_audio"] = f"data:audio/wav;base64,{audio_b64}"
+            payload["ref_audio"] = ref_url
             if ref_text:
                 payload["ref_text"] = ref_text
             logger.info(
-                "Voxtral clonage vocal — ref_audio=%s (%d Ko) ref_text=%s",
-                reference_audio.name,
-                len(audio_b64) // 1024,
+                "Voxtral clonage vocal — ref_audio=%s ref_text=%s",
+                ref_url,
                 bool(ref_text),
             )
         else:

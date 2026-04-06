@@ -126,9 +126,10 @@ if not exist "%~dp0venv\Scripts\activate.bat" (
 )
 
 :: --- Ouvrir la fenetre du serveur web FastAPI ---
+:: Les logs sont affiches en console ET ecrits dans backend.log (pour monitor.bat)
 echo.
 echo [4/4] Demarrage du serveur web VoiceClonIA...
-start "VoiceClonIA — Serveur web" cmd /k "cd /d %~dp0 && echo  [VoiceClonIA] Serveur FastAPI — http://127.0.0.1:8000 && echo. && call venv\Scripts\activate.bat && uvicorn backend.main:app --host 127.0.0.1 --port 8000"
+start "VoiceClonIA — Serveur web" cmd /k "cd /d %~dp0 && call venv\Scripts\activate.bat && uvicorn backend.main:app --host 127.0.0.1 --port 8000 2>&1 | powershell -noprofile -command \"$input | Tee-Object -FilePath '%~dp0backend.log'\""
 echo [OK] Fenetre serveur web ouverte
 
 :: --- Resume ---

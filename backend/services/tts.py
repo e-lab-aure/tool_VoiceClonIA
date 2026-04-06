@@ -425,9 +425,16 @@ class VoxtralEngine(TTSEngine):
                         audio_data,
                     ).astype(np.float32)
                 logger.info(
-                    "Voxtral — référence rééchantillonnée %d Hz → %d Hz",
+                    "Voxtral — reference reechantillonnee %d Hz -> %d Hz",
                     src_sr, _VOXTRAL_SR,
                 )
+
+            # Suppression du silence en debut/fin (evite l'echec de conditioning)
+            try:
+                import librosa
+                audio_data, _ = librosa.effects.trim(audio_data, top_db=30)
+            except Exception:
+                pass
 
             wav_buf = io.BytesIO()
             sf.write(wav_buf, audio_data, _VOXTRAL_SR, format="WAV", subtype="PCM_16")
@@ -437,9 +444,11 @@ class VoxtralEngine(TTSEngine):
             if ref_text:
                 payload["ref_text"] = ref_text
             logger.info(
-                "Voxtral clonage vocal — ref_audio=%s (%d Ko) ref_text=%s",
+                "Voxtral clonage vocal — ref_audio=%s (%d Ko, %.1fs a %d Hz) ref_text=%s",
                 reference_audio.name,
                 len(audio_b64) // 1024,
+                len(audio_data) / _VOXTRAL_SR,
+                _VOXTRAL_SR,
                 bool(ref_text),
             )
         else:
@@ -463,7 +472,7 @@ class VoxtralEngine(TTSEngine):
         except httpx.HTTPStatusError as exc:
             raise RuntimeError(
                 f"Voxtral a retourné une erreur HTTP {exc.response.status_code} : "
-                f"{exc.response.text[:200]}"
+                f"{exc.response.text[:600]}"
             ) from exc
         except httpx.RequestError as exc:
             raise RuntimeError(
